@@ -4,7 +4,7 @@
 <footer class="py-4 mt-auto">
   <div class="container text-center text-muted small">
     <p class="mb-1">&copy; <?= date('Y') ?> <strong>AppSalon</strong></p>
-    <p class="mb-0">Julian Andres Gomez Cabrera - Samuel Orozco Varela - Juliana Perez Rocha </p>
+    <p class="mb-0">Julian Andres Gomez Cabrera - Samuel Orozco Varela - Juliana Perez Rocha</p>
     <p class="mb-0">Entrega Intermedia </p>
   </div>
 </footer>
