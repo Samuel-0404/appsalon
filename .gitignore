@@ -1,0 +1,6 @@
+includes/config.php
+config/config.php
+.env
+vendor/
+.vscode/
+.DS_Store
