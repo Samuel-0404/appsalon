@@ -28,5 +28,6 @@ Aplicación web para un salón de belleza. PHP MVC propio + MySQL + Bootstrap.
 - [ ] CRUD de servicios (admin)
 
 ## Equipo
-- Persona A: núcleo, BD y autenticación
-- Persona B: servicios, interfaz y documentación
+- Julian Andres Gomez Cabrera
+- Samuel Orozco Varela
+- Juliana Perez Rocha
