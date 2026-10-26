@@ -1,6 +1,15 @@
 <?php
 // Responsable: A  -- Contratos que usa B: e(), setAlerta(), requireLogin(), requireAdmin()
 
+session_set_cookie_params([
+    'lifetime' => 0,                       // la cookie muere al cerrar el navegador
+    'path'     => '/',
+    'httponly' => true,                    // JavaScript no puede leerla (mitiga robo de sesión por XSS)
+    'samesite' => 'Lax',                   // no se envía en POST desde otros sitios (refuerza el CSRF)
+    'secure'   => !empty($_SERVER['HTTPS']),  // solo por HTTPS cuando lo haya; en XAMPP local queda en false
+]);
+
+ini_set('session.use_strict_mode', '1');  // rechaza IDs de sesión que no generó el servidor
 session_start();
 
 /** Escapar salida (protección XSS) */
