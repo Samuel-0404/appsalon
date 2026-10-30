@@ -1,2 +1,122 @@
-/* Responsable: B */
-body { background: #f8f9fa; }
+/* Responsable: B - Estilos personalizados y diseño responsive */
+
+/* 1. Tipografía y fondo general */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+:root {
+    --primary-color: #6366f1;
+    --primary-hover: #4f46e5;
+    --dark-bg: #1e1e2d;
+    --card-border: rgba(0, 0, 0, 0.06);
+}
+
+body {
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: transparent !important;
+    color: #334155;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+/* Fondo con tu imagen: difuminada, minimalista y responsive */
+body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-image:
+        linear-gradient(rgba(248, 250, 252, 0.82), rgba(248, 250, 252, 0.88)),
+        url('../img/fondoappsalon.jpeg');
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+    filter: blur(8px);
+    transform: scale(1.05);
+    /* Evita bordes blancos al desenfocar */
+    z-index: -1;
+    pointer-events: none;
+}
+
+main {
+    flex: 1;
+}
+
+/* 2. Barra de navegación */
+.navbar {
+    background-color: var(--dark-bg) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.navbar-brand {
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    background: linear-gradient(135deg, #a5b4fc, #818cf8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.nav-link {
+    font-weight: 500;
+    transition: color 0.2s ease-in-out;
+}
+
+/* 3. Tarjetas de servicios (Efecto Hover y Elevación) */
+.service-card {
+    border: 1px solid var(--card-border) !important;
+    border-radius: 12px;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    background: #ffffff;
+}
+
+.service-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 24px rgba(99, 102, 241, 0.12) !important;
+}
+
+/* 4. Formularios y Botones */
+.form-control,
+.form-select {
+    border-radius: 8px;
+    padding: 0.65rem 0.9rem;
+    border-color: #cbd5e1;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.25rem rgba(99, 102, 241, 0.15);
+}
+
+.btn {
+    border-radius: 8px;
+    font-weight: 500;
+    padding: 0.55rem 1.1rem;
+    transition: all 0.2s ease;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-hover);
+    border-color: var(--primary-hover);
+}
+
+/* 5. Alertas con mejor diseño */
+.alert {
+    border-radius: 10px;
+    border: none;
+    font-size: 0.95rem;
+}
+
+/* 6. Pie de página */
+footer {
+    background: #ffffff;
+    border-top: 1px solid #e2e8f0;
+}
