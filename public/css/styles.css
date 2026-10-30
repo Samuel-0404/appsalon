@@ -12,11 +12,33 @@
 
 body {
     font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
-    background-color: #f8fafc;
+    background: transparent !important;
     color: #334155;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    position: relative;
+}
+
+/* Fondo con tu imagen: difuminada, minimalista y responsive */
+body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-image:
+        linear-gradient(rgba(248, 250, 252, 0.82), rgba(248, 250, 252, 0.88)),
+        url('../img/fondoappsalon.jpeg');
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
+    filter: blur(8px);
+    transform: scale(1.05);
+    /* Evita bordes blancos al desenfocar */
+    z-index: -1;
+    pointer-events: none;
 }
 
 main {
