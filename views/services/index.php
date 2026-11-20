@@ -44,7 +44,10 @@
                                 </span>
                             </div>
                             <?php if (estaLogueado()): ?>
-                                <span class="badge bg-success-subtle text-success border">Disponible</span>
+                                <a href="<?= BASE_URL ?>/index.php?url=citas/crear&servicio_id=<?= e($servicio['id']) ?>" 
+                                   class="btn btn-sm btn-primary d-inline-flex align-items-center gap-1">
+                                    <span>+</span> Reservar
+                                </a>
                             <?php else: ?>
                                 <a href="<?= BASE_URL ?>/index.php?url=auth/login" class="btn btn-sm btn-outline-primary">
                                     Reservar
