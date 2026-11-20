@@ -25,6 +25,25 @@ $rutas = [
     'servicios/crear'   => ['ServiceController', 'crear'],
     'servicios/editar'  => ['ServiceController', 'editar'],
     'servicios/eliminar'=> ['ServiceController', 'eliminar'],
+
+    // --- Bloque Citas (Entrega Final) ---
+    'citas/crear'          => ['AppointmentController', 'crear'],
+    'citas/editar'         => ['AppointmentController', 'editar'],
+    'citas/mis-citas'      => ['AppointmentController', 'misCitas'],
+    'citas/cancelar'       => ['AppointmentController', 'cancelar'],
+    'citas/horas-ocupadas' => ['AppointmentController', 'horasOcupadas'],
+    'citas/ver-correo'     => ['AppointmentController', 'verCorreoCita'],
+
+        // --- Bloque Admin Avanzado (Entrega Final)                        ---
+    'admin/dashboard'      => ['AdminController', 'index'],
+    'admin/cita-estado'    => ['AdminController', 'cambiarEstadoCita'],
+    'admin/usuarios'       => ['AdminController', 'usuarios'],
+    'admin/usuario-toggle' => ['AdminController', 'toggleUsuario'],
+    'admin/disponibilidad' => ['AdminController', 'disponibilidad'],
+    'admin/bloquear-hora'  => ['AdminController', 'bloquearHora'],
+    'admin/liberar-hora'   => ['AdminController', 'liberarHora'],
+    'admin/buzon'          => ['AdminController', 'buzon'],
+    'admin/buzon-ver'      => ['AdminController', 'verCorreo'],
 ];
 
 $url = $_GET['url'] ?? 'servicios/index';

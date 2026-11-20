@@ -15,13 +15,18 @@
     <button class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#menu"><span class="navbar-toggler-icon"></span></button>
     <div class="collapse navbar-collapse" id="menu">
       <ul class="navbar-nav ms-auto">
-        <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=servicios/index">Servicios</a></li>
         <?php if (esAdmin()): ?>
-          <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=servicios/admin">Administrar servicios</a></li>
-        <?php endif; ?>
-        <?php if (estaLogueado()): ?>
-          <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=auth/logout">Salir (<?= e($_SESSION['nombre'] ?? '') ?>)</a></li>
+          <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=admin/dashboard">📊 Dashboard</a></li>
+          <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=servicios/admin">✂️ Servicios</a></li>
+          <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=admin/usuarios">👥 Usuarios</a></li>
+          <li class="nav-item"><a class="nav-link text-warning" href="<?= BASE_URL ?>/index.php?url=auth/logout">Salir (<?= e($_SESSION['nombre'] ?? '') ?>)</a></li>
+        <?php elseif (estaLogueado()): ?>
+          <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=servicios/index">Servicios</a></li>
+          <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=citas/crear">Reservar Cita</a></li>
+          <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=citas/mis-citas">Mis Citas</a></li>
+          <li class="nav-item"><a class="nav-link text-warning" href="<?= BASE_URL ?>/index.php?url=auth/logout">Salir (<?= e($_SESSION['nombre'] ?? '') ?>)</a></li>
         <?php else: ?>
+          <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=servicios/index">Servicios</a></li>
           <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=auth/login">Ingresar</a></li>
           <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=auth/registro">Registrarse</a></li>
         <?php endif; ?>
