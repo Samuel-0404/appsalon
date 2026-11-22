@@ -1,4 +1,19 @@
-<?php /* Responsable: A  -- Reportes y exportación (entrega final). Sigue el estilo del panel de B (admin/index.php) */
+<?php 
+
+/**
+ * Responsable: A -- Reportes y exportación (entrega final).
+ * Sigue el estilo del panel de B (admin/index.php).
+ *
+ * Variables que inyecta ReportController::index() mediante render()/extract():
+ *
+ * @var array{inicio: string, fin: string, estado: ?string} $filtros
+ * @var array<string, string> $errores
+ * @var array<string, mixed> $resumen
+ * @var array<int, array<string, mixed>> $servicios
+ * @var array<int, array{fecha: string, citas: int, ingresos: float}> $porDia
+ * @var array<int, array<string, mixed>> $citas
+ */
+
 $cop = fn($v) => '$' . number_format((float)$v, 0, ',', '.');
 $qs  = fn(array $extra = []) => http_build_query(array_filter([
     'inicio' => $filtros['inicio'], 'fin' => $filtros['fin'], 'estado' => $filtros['estado'],

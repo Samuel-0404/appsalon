@@ -24,7 +24,7 @@ Aplicación web desarrollada con PHP MVC propio y MySQL para la gestión de un s
    - Al ejecutarlo, se creará automáticamente la base de datos `appsalon_mvc_php`, las 4 tablas con claves foráneas y los datos de prueba.
 
 4. **Configuración del entorno:**
-   - Asegurarse de tener el archivo de configuración `includes/config.php` (si no existe, copiar `config/config.example.php` a `includes/config.php`).
+   - Asegurarse de tener el archivo de configuración `config/config.php` (si no existe, copiar `config/config.example.php` a `includes/config.php`).
    - Configuración predeterminada para XAMPP:
      ```php
      define('DB_HOST', 'localhost');
