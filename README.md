@@ -71,6 +71,22 @@ Aplicación web desarrollada con PHP MVC propio y MySQL para la gestión de un s
 - **Validación visual:** Marcado de campos erróneos con la clase `is-invalid` y mensajes `.invalid-feedback` de Bootstrap.
 - **Mensajes de estado:** Sistema de alertas flash dismissibles para notificar el éxito o fracaso de las operaciones.
 
+### API REST (entrega final)
+- Front controller propio en `public/api.php`, con rutas limpias `/api/...` mediante `public/.htaccess`. Respuestas JSON con un sobre uniforme y códigos HTTP 200/201/204/400/401/403/404/405/409/415/422.
+- Autenticación con token Bearer de 256 bits. En `api_tokens` solo se guarda el hash SHA-256 y el token vence a las 8 h.
+- Endpoints: `POST /auth/login`, `POST /auth/logout`, `GET /servicios`, `GET /citas/usuario/{id}`, `GET /citas/{id}`, `POST /citas` y `PUT /citas/{id}`.
+- Reglas compartidas en `models/ValidadorCita.php`: no se permiten domingos, fechas pasadas ni horarios fuera de 09:00–19:00; el solapamiento se calcula por la duración real de los servicios, y la reserva se serializa con `GET_LOCK` para evitar dobles reservas simultáneas.
+- Documentación en `docs/API.md` y colección de Postman en `docs/AppSalon_API.postman_collection.json`.
+
+### Reportes y exportación (entrega final)
+- `reportes/index`: filtros por período y estado, KPIs (ingresos realizados, por cobrar, ticket promedio y tasa de cancelación) y gráficas con Chart.js.
+- Exportación a CSV (citas, servicios y serie diaria) con BOM UTF-8, separador `;` y protección contra inyección de fórmulas.
+- Exportación a PDF con TCPDF (`composer install`).
+
+### Instalación adicional para la entrega final
+1. Aplicar la migración: `mysql -u root appsalon_mvc_php < database/migraciones/002_api_reportes.sql`, o reimportar `database/appsalon.sql`.
+2. Instalar las dependencias en la raíz del proyecto: `composer install` (instala TCPDF en `vendor/`, que está en `.gitignore`).
+
 ---
 
 ## 4. Tecnologías Utilizadas

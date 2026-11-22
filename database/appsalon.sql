@@ -3,6 +3,7 @@
 CREATE DATABASE IF NOT EXISTS appsalon_mvc_php CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE appsalon_mvc_php;
 
+DROP TABLE IF EXISTS api_tokens;
 DROP TABLE IF EXISTS citasServicios;
 DROP TABLE IF EXISTS citas;
 DROP TABLE IF EXISTS servicios;
@@ -40,7 +41,8 @@ CREATE TABLE citas (
   total DECIMAL(10,2),
   estado ENUM('pendiente','confirmada','completada','cancelada') DEFAULT 'pendiente',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (usuarioId) REFERENCES usuarios(id) ON DELETE SET NULL
+  FOREIGN KEY (usuarioId) REFERENCES usuarios(id) ON DELETE SET NULL,
+  INDEX idx_citas_fecha_estado (fecha, estado)
 );
 
 CREATE TABLE citasServicios (
@@ -49,6 +51,18 @@ CREATE TABLE citasServicios (
   servicioId INT,
   FOREIGN KEY (citaId) REFERENCES citas(id) ON DELETE CASCADE,
   FOREIGN KEY (servicioId) REFERENCES servicios(id) ON DELETE CASCADE
+);
+
+-- Entrega final: tokens de la API REST (solo se guarda el hash SHA-256 del token)
+CREATE TABLE api_tokens (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  usuarioId INT NOT NULL,
+  token_hash CHAR(64) NOT NULL,
+  expira DATETIME NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_api_tokens_hash (token_hash),
+  KEY idx_api_tokens_usuario_expira (usuarioId, expira),
+  CONSTRAINT fk_api_tokens_usuario FOREIGN KEY (usuarioId) REFERENCES usuarios(id) ON DELETE CASCADE
 );
 
 -- Datos de prueba (admin123 / cliente123)

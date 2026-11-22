@@ -44,6 +44,11 @@ $rutas = [
     'admin/liberar-hora'   => ['AdminController', 'liberarHora'],
     'admin/buzon'          => ['AdminController', 'buzon'],
     'admin/buzon-ver'      => ['AdminController', 'verCorreo'],
+
+    // --- Bloque A: reportes (Entrega Final) --- la API REST vive en public/api.php
+    'reportes/index' => ['ReportController', 'index'],
+    'reportes/csv'   => ['ReportController', 'csv'],
+    'reportes/pdf'   => ['ReportController', 'pdf'],
 ];
 
 $url = $_GET['url'] ?? 'servicios/index';

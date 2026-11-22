@@ -1,0 +1,13 @@
+{
+    "name": "appsalon/appsalon",
+    "description": "AppSalon - Sistema de gestión de citas (PHP MVC propio)",
+    "type": "project",
+    "require": {
+        "php": ">=8.0",
+        "tecnickcom/tcpdf": "^6.7"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    }
+}
