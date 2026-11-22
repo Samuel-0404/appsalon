@@ -1,7 +1,7 @@
 <?php
 // Responsable: A
 // Devuelve la conexión PDO (usar siempre prepared statements).
-require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../config/config.php';
 
 // Zona horaria única para PHP y MySQL (Colombia, UTC-5 sin horario de verano).
 // Sin esto, XAMPP usa Europe/Berlin en PHP y la hora del sistema en MySQL: las validaciones de

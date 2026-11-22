@@ -1,7 +1,7 @@
 <?php
 // Responsable: A  (front controller / router)
 // Cada uno agrega SUS rutas en su bloque para evitar conflictos de merge.
-require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../config/database.php';
 

@@ -4,7 +4,7 @@
 // URL sin rewrite:     /appsalon/public/api.php/servicios   (PATH_INFO)
 // No carga includes/functions.php a propósito: la API es stateless (sin sesión ni cookies).
 
-require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../config/database.php';
 
 spl_autoload_register(function ($clase) {

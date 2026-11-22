@@ -1,6 +1,16 @@
 <?php
-/* Responsable: A  -- Plantilla HTML para TCPDF (subconjunto de HTML: tablas y estilos en línea).
-   Variables: $f (filtros), $resumen, $servicios, $citas */
+/** Responsable: A -- Reportes y exportación (entrega final).
+ * Sigue el estilo del panel de B (admin/index.php).
+ *
+ * Variables que inyecta ReportController::index() mediante render()/extract():
+ * @var array{inicio: string, fin: string, estado: ?string} $f
+ * @var array<string, string> $errores
+ * @var array<string, mixed> $resumen
+ * @var array<int, array<string, mixed>> $servicios
+ * @var array<int, array{fecha: string, citas: int, ingresos: float}> $porDia
+ * @var array<int, array<string, mixed>> $citas
+ */
+
 $cop = fn($v) => '$' . number_format((float)$v, 0, ',', '.');
 ?>
 <h1 style="font-size:18pt;color:#1e1e2d;">AppSalon · Reporte de citas e ingresos</h1>
