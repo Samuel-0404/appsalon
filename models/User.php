@@ -43,4 +43,25 @@ class User {
         ]);
         return (int) $db->lastInsertId();
     }
+
+        /**
+     * Devuelve todos los usuarios registrados (para el panel admin)
+     */
+    public static function todos(): array {
+        $db = conectarDB();
+        $query = "SELECT id, nombre, apellido, email, telefono, admin, confirmado, created_at 
+                  FROM usuarios 
+                  ORDER BY id DESC";
+        return $db->query($query)->fetchAll();
+    }
+
+    /**
+     * Activa o desactiva un usuario (toggle)
+     */
+    public static function toggleEstado(int $id): bool {
+        $db = conectarDB();
+        $query = "UPDATE usuarios SET confirmado = IF(confirmado = 1, 0, 1) WHERE id = :id AND admin = 0";
+        $stmt = $db->prepare($query);
+        return $stmt->execute([':id' => $id]);
+    }
 }
