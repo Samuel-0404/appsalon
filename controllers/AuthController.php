@@ -34,6 +34,7 @@ class AuthController {
                     session_regenerate_id(true); // nuevo ID de sesión: evita fijación de sesión
                     $_SESSION['usuario_id'] = (int) $u['id'];
                     $_SESSION['nombre']     = $u['nombre'];
+                    $_SESSION['email']      = $u['email'];
                     $_SESSION['admin']      = (bool) $u['admin'];
 
                     setAlerta('success', '¡Bienvenido, ' . $u['nombre'] . '!');
