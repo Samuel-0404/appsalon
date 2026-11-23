@@ -1,7 +1,7 @@
 <?php
 // Responsable: A  (front controller / router)
 // Cada uno agrega SUS rutas en su bloque para evitar conflictos de merge.
-require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../config/config.php';
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../config/database.php';
 
@@ -44,6 +44,11 @@ $rutas = [
     'admin/liberar-hora'   => ['AdminController', 'liberarHora'],
     'admin/buzon'          => ['AdminController', 'buzon'],
     'admin/buzon-ver'      => ['AdminController', 'verCorreo'],
+
+    // --- Bloque A: reportes (Entrega Final) --- la API REST vive en public/api.php
+    'reportes/index' => ['ReportController', 'index'],
+    'reportes/csv'   => ['ReportController', 'csv'],
+    'reportes/pdf'   => ['ReportController', 'pdf'],
 ];
 
 $url = $_GET['url'] ?? 'servicios/index';

@@ -9,7 +9,7 @@
   <link href="<?= BASE_URL ?>/css/styles.css" rel="stylesheet">
 </head>
 <body>
-<nav class="navbar navbar-expand-md navbar-dark bg-dark">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
   <div class="container">
     <a class="navbar-brand" href="<?= BASE_URL ?>/index.php">AppSalon</a>
     <button class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#menu"><span class="navbar-toggler-icon"></span></button>
@@ -19,6 +19,7 @@
           <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=admin/dashboard">📊 Dashboard</a></li>
           <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=servicios/admin">✂️ Servicios</a></li>
           <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=admin/usuarios">👥 Usuarios</a></li>
+          <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=reportes/index">📈 Reportes</a></li>
           <li class="nav-item"><a class="nav-link text-warning" href="<?= BASE_URL ?>/index.php?url=auth/logout">Salir (<?= e($_SESSION['nombre'] ?? '') ?>)</a></li>
         <?php elseif (estaLogueado()): ?>
           <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=servicios/index">Servicios</a></li>

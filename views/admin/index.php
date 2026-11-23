@@ -6,6 +6,9 @@
         <p class="text-muted mb-0">Monitorea los ingresos, citas y la agenda en tiempo real.</p>
     </div>
     <div class="d-flex gap-2">
+        <a href="<?= BASE_URL ?>/index.php?url=reportes/index" class="btn btn-dark btn-sm">
+            📈 Reportes
+        </a>
         <a href="<?= BASE_URL ?>/index.php?url=admin/buzon" class="btn btn-outline-dark btn-sm">
             📬 Buzón de Correos
         </a>
