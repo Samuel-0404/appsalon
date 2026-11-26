@@ -33,6 +33,7 @@ $rutas = [
     'citas/cancelar'       => ['AppointmentController', 'cancelar'],
     'citas/horas-ocupadas' => ['AppointmentController', 'horasOcupadas'],
     'citas/ver-correo'     => ['AppointmentController', 'verCorreoCita'],
+    'citas/festivos'       => ['AppointmentController', 'festivos'],
 
         // --- Bloque Admin Avanzado (Entrega Final)                        ---
     'admin/dashboard'      => ['AdminController', 'index'],

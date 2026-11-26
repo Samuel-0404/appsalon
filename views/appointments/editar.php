@@ -84,6 +84,7 @@
                                min="<?= date('Y-m-d') ?>" 
                                value="<?= e($cita['fecha'] ?? '') ?>" 
                                required>
+                        <div class="invalid-feedback" id="fecha-error"></div>
                     </div>
 
                     <!-- Hora -->
@@ -170,6 +171,57 @@ document.addEventListener('DOMContentLoaded', () => {
     checks.forEach(check => {
         check.addEventListener('change', actualizarResumen);
     });
+
+    // --- Validación de domingos y festivos (consume citas/festivos) ---
+    const inputFecha = document.getElementById('fecha');
+    const fechaError = document.getElementById('fecha-error');
+    const cacheFestivos = {};   // anio => Promise<{ 'Y-m-d': nombre }>
+
+    function festivosDe(anio) {
+        // Se guarda la PROMESA, no el resultado: si se pide el mismo año dos veces
+        // seguidas, se reutiliza la misma petición en vez de lanzar otra
+        if (!cacheFestivos[anio]) {
+            cacheFestivos[anio] = fetch('<?= BASE_URL ?>/index.php?url=citas/festivos&anio=' + anio)
+                .then(res => {
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
+                .then(data => Object.fromEntries(data.festivos.map(f => [f.fecha, f.nombre])))
+                .catch(err => { delete cacheFestivos[anio]; throw err; });   // permite reintentar
+        }
+        return cacheFestivos[anio];
+    }
+
+    async function validarFecha() {
+        const valor = inputFecha.value;            // 'Y-m-d'
+        let mensaje = '';
+
+        if (valor) {
+            const [a, m, d] = valor.split('-').map(Number);
+            // new Date(a, m-1, d) = fecha LOCAL. new Date('2026-12-08') la interpreta en UTC
+            // y en Colombia (UTC-5) quedaría en el día anterior → getDay() incorrecto
+            const fecha = new Date(a, m - 1, d);
+
+            if (fecha.getDay() === 0) {
+                mensaje = 'El salón no atiende los domingos.';
+            } else {
+                try {
+                    const festivos = await festivosDe(a);
+                    if (festivos[valor]) mensaje = `Es festivo (${festivos[valor]}): el salón no atiende.`;
+                } catch (err) {
+                    console.error('No se pudieron cargar los festivos:', err);   // el servidor igual valida
+                }
+            }
+        }
+
+        if (inputFecha.value !== valor) return;    // el usuario cambió la fecha mientras esperábamos
+        inputFecha.setCustomValidity(mensaje);     // '' = válido; con texto, el navegador bloquea el submit
+        inputFecha.classList.toggle('is-invalid', mensaje !== '');
+        fechaError.textContent = mensaje;
+    }
+
+    inputFecha.addEventListener('change', validarFecha);
+    validarFecha();   // por si la cita ya estaba en una fecha que ahora es festiva
 
     actualizarResumen();
 });

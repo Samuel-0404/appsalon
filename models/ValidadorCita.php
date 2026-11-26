@@ -30,10 +30,12 @@ class ValidadorCita {
             $errores['fecha'] = 'No se permiten fechas pasadas.';
         } elseif ($fecha->format('w') === '0') {
             $errores['fecha'] = 'El salón no atiende los domingos.';
+        } elseif (($festivo = Festivo::buscar($fechaTxt)) !== null) {          // ← NUEVO
+            $errores['fecha'] = "El $fechaTxt es festivo ($festivo): el salón no atiende.";
         } else {
             $datos['fecha'] = $fechaTxt;
         }
-
+        
         // ---- Hora: HH:MM en punto, dentro del horario ----
         $horaTxt = is_string($entrada['hora'] ?? null) ? substr(trim($entrada['hora']), 0, 5) : '';
         if (!preg_match('/^([01]\d|2[0-3]):00$/', $horaTxt)) {

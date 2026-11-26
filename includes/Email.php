@@ -1,5 +1,10 @@
 <?php
 // Servicio de Notificaciones por Email - Entrega Final (Módulo 6)
+// Envío real con PHPMailer (composer require phpmailer/phpmailer) por SMTP autenticado con TLS.
+// Proveedor recomendado: Brevo (smtp-relay.brevo.com:587, STARTTLS). La configuración vive en config/config.php.
+
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception as MailerException;
 
 class Email {
 
@@ -70,88 +75,70 @@ class Email {
         // 2. Guardar copia en la carpeta de auditoría / evidencia local
         self::guardarBandejaLocal($destinatarioEmail, $asunto, $cuerpoHTML, $citaId);
 
-        // 3. Envío directo a Mailtrap vía SMTP
-        self::enviarSmtp($destinatarioEmail, $asunto, $cuerpoHTML);
-
-        return true;
+        // 3. Envío real por SMTP. Devuelve el resultado verdadero (antes siempre era true)
+        return self::enviarSmtp($destinatarioEmail, $asunto, $cuerpoHTML, $nombreCliente);
     }
 
     /**
-     * Envía correo vía socket SMTP directo (Mailtrap) sin requerir librerías externas
+     * Envía un correo HTML por SMTP autenticado con PHPMailer.
+     * Puerto 465 => TLS implícito (SMTPS); cualquier otro (587, 2525) => STARTTLS.
+     * Nunca lanza excepciones: si falla, lo registra en el log de PHP y devuelve false,
+     * para que una caída del proveedor de correo no impida guardar la cita.
      */
-    public static function enviarSmtp(string $para, string $asunto, string $html): bool {
-        if (!defined('SMTP_HOST') || empty(SMTP_HOST) || !defined('SMTP_USER') || empty(SMTP_USER) || !defined('SMTP_PASS') || empty(SMTP_PASS)) {
-            return false;
-        }
-
-        $host = SMTP_HOST;
-        $port = defined('SMTP_PORT') ? (int)SMTP_PORT : 2525;
-        $user = SMTP_USER;
-        $pass = SMTP_PASS;
-        $from = defined('MAIL_FROM') ? MAIL_FROM : 'citas@appsalon.com';
-        $fromName = defined('MAIL_NAME') ? MAIL_NAME : 'AppSalon Citas';
-
-        $socket = @fsockopen($host, $port, $errno, $errstr, 5);
-        if (!$socket) {
-            error_log("No se pudo conectar a Mailtrap SMTP ($host:$port): $errstr ($errno)");
-            return false;
-        }
-
-        stream_set_timeout($socket, 5);
-
-        $leer = function($sock, $esperado = '250') {
-            $respuesta = '';
-            while ($linea = fgets($sock, 512)) {
-                $respuesta .= $linea;
-                if (strlen($linea) >= 4 && substr($linea, 3, 1) === ' ') {
-                    break;
-                }
+    public static function enviarSmtp(string $para, string $asunto, string $html, string $nombrePara = ''): bool {
+        foreach (['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'MAIL_FROM'] as $const) {
+            if (!defined($const) || trim((string)constant($const)) === '') {
+                error_log("[Email] Falta configurar $const: no se envió el correo (solo quedó la copia local).");
+                return false;
             }
-            return (empty($esperado) || str_starts_with($respuesta, (string)$esperado));
-        };
+        }
+        if (!filter_var($para, FILTER_VALIDATE_EMAIL)) {
+            error_log("[Email] Destinatario inválido: $para");
+            return false;
+        }
 
-        $enviar = function($sock, $cmd) {
-            fputs($sock, $cmd . "\r\n");
-        };
+        $autoload = __DIR__ . '/../vendor/autoload.php';
+        if (!file_exists($autoload)) {
+            error_log('[Email] Falta vendor/autoload.php: ejecuta "composer install".');
+            return false;
+        }
+        require_once $autoload;
 
-        if (!$leer($socket, '220')) { fclose($socket); return false; }
+        $puerto = defined('SMTP_PORT') ? (int)SMTP_PORT : 587;
+        $mail   = new PHPMailer(true);   // true = lanza excepciones en vez de fallar en silencio
 
-        $enviar($socket, "EHLO " . ($_SERVER['SERVER_NAME'] ?? 'localhost'));
-        if (!$leer($socket, '250')) { fclose($socket); return false; }
+        try {
+            $mail->isSMTP();
+            $mail->Host       = SMTP_HOST;
+            $mail->Port       = $puerto;
+            $mail->SMTPAuth   = true;
+            $mail->Username   = SMTP_USER;
+            $mail->Password   = SMTP_PASS;
+            $mail->SMTPSecure = $puerto === 465 ? PHPMailer::ENCRYPTION_SMTPS : PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->Timeout    = 10;      // segundos; evita que la reserva se quede colgada
+            $mail->CharSet    = PHPMailer::CHARSET_UTF8;
 
-        $enviar($socket, "AUTH LOGIN");
-        if (!$leer($socket, '334')) { fclose($socket); return false; }
+            $mail->setFrom(MAIL_FROM, defined('MAIL_NAME') ? MAIL_NAME : 'AppSalon Citas');
+            $mail->addAddress($para, $nombrePara);
 
-        $enviar($socket, base64_encode($user));
-        if (!$leer($socket, '334')) { fclose($socket); return false; }
+            $mail->isHTML(true);
+            $mail->Subject = $asunto;
+            $mail->Body    = $html;
+            $mail->AltBody = self::textoPlano($html);   // versión sin HTML: mejora la entregabilidad
 
-        $enviar($socket, base64_encode($pass));
-        if (!$leer($socket, '235')) { fclose($socket); return false; }
+            $mail->send();
+            return true;
+        } catch (MailerException $ex) {
+            error_log("[Email] No se pudo enviar a $para: " . $mail->ErrorInfo);
+            return false;
+        }
+    }
 
-        $enviar($socket, "MAIL FROM: <$from>");
-        if (!$leer($socket, '250')) { fclose($socket); return false; }
-
-        $enviar($socket, "RCPT TO: <$para>");
-        if (!$leer($socket, '250')) { fclose($socket); return false; }
-
-        $enviar($socket, "DATA");
-        if (!$leer($socket, '354')) { fclose($socket); return false; }
-
-        $headers  = "MIME-Version: 1.0\r\n";
-        $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
-        $headers .= "From: =?UTF-8?B?" . base64_encode($fromName) . "?= <" . $from . ">\r\n";
-        $headers .= "To: <" . $para . ">\r\n";
-        $headers .= "Subject: =?UTF-8?B?" . base64_encode($asunto) . "?=\r\n";
-        $headers .= "Date: " . date(DATE_RFC2822) . "\r\n";
-        $headers .= "\r\n";
-
-        $enviar($socket, $headers . $html . "\r\n.");
-        if (!$leer($socket, '250')) { fclose($socket); return false; }
-
-        $enviar($socket, "QUIT");
-        fclose($socket);
-
-        return true;
+    /** Convierte la plantilla HTML en texto plano para AltBody (sin el bloque <style>). */
+    private static function textoPlano(string $html): string {
+        $sinEstilos = preg_replace('#<(style|head)\b[^>]*>.*?</\1>#si', '', $html);
+        $texto = html_entity_decode(strip_tags(str_replace(['<br>', '</p>', '</div>'], "\n", $sinEstilos)), ENT_QUOTES, 'UTF-8');
+        return trim(preg_replace("/[ \t]+/", ' ', preg_replace("/\n\s*\n+/", "\n\n", $texto)));
     }
 
     /**
@@ -160,7 +147,7 @@ class Email {
     private static function guardarBandejaLocal(string $para, string $asunto, string $html, int $citaId): void {
         $dir = __DIR__ . '/../docs/correos_enviados';
         if (!is_dir($dir)) {
-            @mkdir($dir, 0777, true);
+            @mkdir($dir, 0775, true);
         }
         $nombreArchivo = $dir . '/cita_' . $citaId . '_' . date('Ymd_His') . '.html';
         @file_put_contents($nombreArchivo, $html);
