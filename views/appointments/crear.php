@@ -158,6 +158,9 @@
     </div>
 </form>
 
+<style>
+  .flatpickr-day.festivo { color: #dc3545 !important; text-decoration: line-through; }
+</style>
 <!-- Scripts de Flatpickr e Interactividad -->
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://npmcdn.com/flatpickr/dist/l10n/es.js"></script>
@@ -176,18 +179,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let fechaActual = inputFecha.value || '<?= date('Y-m-d') ?>';
 
-    // 1. Inicializar Flatpickr en modo visual integrado (Inline)
+    // 1. Festivos: diccionario 'Y-m-d' => nombre (se llena vía fetch)
+    const festivos = {};
+    const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const esDomingo = d => d.getDay() === 0;
+    const esFestivo = d => ymd(d) in festivos;
+
     const fp = flatpickr("#calendario-inline", {
         inline: true,
         locale: 'es',
         minDate: 'today',
         defaultDate: fechaActual,
-        disable: [
-            function(date) {
-                // Deshabilitar Domingos (0 = Domingo)
-                return (date.getDay() === 0);
+        disable: [esDomingo],                       // los festivos se agregan cuando llegue el fetch
+        onDayCreate: (dObj, dStr, instancia, dayElem) => {
+            const nombre = festivos[ymd(dayElem.dateObj)];
+            if (nombre) {
+                dayElem.classList.add('festivo');
+                dayElem.title = 'Festivo: ' + nombre;   // tooltip al pasar el mouse
             }
-        ],
+        },
         onChange: function(selectedDates, dateStr) {
             fechaActual = dateStr;
             inputFecha.value = dateStr;
@@ -198,6 +208,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    function cargarFestivos(anio) {
+        return fetch('<?= BASE_URL ?>/index.php?url=citas/festivos&anio=' + anio)
+            .then(res => {
+                if (!res.ok) throw new Error('HTTP ' + res.status);   // fetch NO falla con 4xx/5xx; hay que revisarlo
+                return res.json();
+            })
+            .then(data => data.festivos.forEach(f => { festivos[f.fecha] = f.nombre; }));
+    }
+
+    // Año actual + siguiente (en noviembre/diciembre ya se agenda para enero)
+    const anioActual = new Date().getFullYear();
+    Promise.all([cargarFestivos(anioActual), cargarFestivos(anioActual + 1)])
+        .then(() => fp.set('disable', [esDomingo, esFestivo]))   // set() redibuja → corre onDayCreate
+        .catch(err => console.error('No se pudieron cargar los festivos:', err));
+    
     // 2. Consulta en tiempo real de horarios ocupados vía AJAX
     function consultarDisponibilidad(fecha) {
         fechaLabel.textContent = 'Consultando disponibilidad...';

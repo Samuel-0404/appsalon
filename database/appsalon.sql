@@ -2,7 +2,10 @@
 -- Cambios vs. el enunciado: email VARCHAR(60) y precio DECIMAL(10,2) (pesos colombianos)
 CREATE DATABASE IF NOT EXISTS appsalon_mvc_php CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE appsalon_mvc_php;
+-- Sin esto, un cliente mysql en latin1 (p. ej. el de Docker) guarda las tildes con doble codificación
+SET NAMES utf8mb4;
 
+DROP TABLE IF EXISTS festivos;
 DROP TABLE IF EXISTS api_tokens;
 DROP TABLE IF EXISTS citasServicios;
 DROP TABLE IF EXISTS citas;
@@ -64,6 +67,14 @@ CREATE TABLE api_tokens (
   KEY idx_api_tokens_usuario_expira (usuarioId, expira),
   CONSTRAINT fk_api_tokens_usuario FOREIGN KEY (usuarioId) REFERENCES usuarios(id) ON DELETE CASCADE
 );
+
+-- Entrega final: festivos de Colombia (los llena models/Festivo.php desde la API Nager.Date)
+CREATE TABLE festivos (
+  fecha        DATE         PRIMARY KEY,
+  nombre       VARCHAR(100) NOT NULL,
+  fuente       VARCHAR(40)  NOT NULL DEFAULT 'nager.date',
+  sincronizado TIMESTAMP    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Datos de prueba (admin123 / cliente123)
 INSERT INTO usuarios (nombre, apellido, email, password, telefono, admin, confirmado) VALUES

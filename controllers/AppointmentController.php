@@ -1,5 +1,5 @@
 <?php
-// Entrega final (Semana 12-16)
+
 
 class AppointmentController {
 
@@ -35,12 +35,16 @@ class AppointmentController {
                 $errores['servicios'] = 'Debes seleccionar al menos un servicio.';
             }
 
-            // 2. Validar fecha (no vacía y no anterior a hoy)
+            // 2. Validar fecha (no vacía, no pasada, no domingo, no festivo)
             $hoy = date('Y-m-d');
             if (empty($cita['fecha'])) {
-                $errores['fecha'] = 'Debes seleccionar una fecha para tu cita.';
+                $errores['fecha'] = 'Debes seleccionar una fecha.';
             } elseif ($cita['fecha'] < $hoy) {
                 $errores['fecha'] = 'No puedes seleccionar una fecha en el pasado.';
+            } elseif (date('w', strtotime($cita['fecha'])) === '0') {
+                $errores['fecha'] = 'El salón no atiende los domingos.';
+            } elseif (($festivo = Festivo::buscar($cita['fecha'])) !== null) {
+                $errores['fecha'] = 'El ' . e($cita['fecha']) . ' es festivo (' . e($festivo) . '): el salón no atiende.';
             }
 
             // 3. Validar hora (entre 09:00 y 18:00)
@@ -170,12 +174,16 @@ class AppointmentController {
                 $errores['servicios'] = 'Debes seleccionar al menos un servicio.';
             }
 
-            // 2. Validar fecha
+            // 2. Validar fecha (no vacía, no pasada, no domingo, no festivo)
             $hoy = date('Y-m-d');
             if (empty($cita['fecha'])) {
                 $errores['fecha'] = 'Debes seleccionar una fecha.';
             } elseif ($cita['fecha'] < $hoy) {
                 $errores['fecha'] = 'No puedes seleccionar una fecha en el pasado.';
+            } elseif (date('w', strtotime($cita['fecha'])) === '0') {
+                $errores['fecha'] = 'El salón no atiende los domingos.';
+            } elseif (($festivo = Festivo::buscar($cita['fecha'])) !== null) {
+                $errores['fecha'] = 'El ' . e($cita['fecha']) . ' es festivo (' . e($festivo) . '): el salón no atiende.';
             }
 
             // 3. Validar hora
@@ -346,5 +354,20 @@ class AppointmentController {
         exit;
     }
 
+    /** GET ?url=citas/festivos&anio=2026  →  {"anio":2026,"festivos":[{"fecha":"...","nombre":"..."}]} */
+    public function festivos() {
+        header('Content-Type: application/json; charset=utf-8');
+
+        $anio = filter_var($_GET['anio'] ?? date('Y'), FILTER_VALIDATE_INT,
+                           ['options' => ['min_range' => 2000, 'max_range' => 2100]]);
+        if ($anio === false) {
+            http_response_code(400);                               // error del cliente
+            echo json_encode(['error' => 'El parámetro anio debe estar entre 2000 y 2100']);
+            exit;
+        }
+
+        echo json_encode(['anio' => $anio, 'festivos' => Festivo::porAnio($anio)], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
 
 }
