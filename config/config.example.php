@@ -22,6 +22,10 @@ define('DB_PASS', env('DB_PASS', ''));
 // Aquí se usa getenv() directo: en Docker BASE_URL viene definida pero VACÍA, y eso debe respetarse.
 define('BASE_URL', rtrim(getenv('BASE_URL') !== false ? getenv('BASE_URL') : '/appsalon/public', '/'));
 
+// Dirección completa de la app, para los enlaces que van en los correos (sin "/" final).
+// XAMPP: http://localhost/appsalon/public   Docker: http://localhost:8080   Servidor: https://tu-dominio
+define('APP_URL', rtrim(env('APP_URL', 'http://localhost' . BASE_URL), '/'));
+
 // --- Correo (SMTP con TLS). Brevo: smtp-relay.brevo.com, puerto 587 (STARTTLS) ---
 define('SMTP_HOST', env('SMTP_HOST', 'smtp-relay.brevo.com'));
 define('SMTP_PORT', (int) env('SMTP_PORT', '587'));

@@ -201,7 +201,7 @@ class Appointment {
      * Agenda del salón entre dos fechas (incluidas), con datos del cliente y servicios.
      * Excluye los bloqueos administrativos (citas sin servicios): esos se gestionan en Disponibilidad.
      */
-    public static function todas(?string $desde = null, ?string $hasta = null, ?string $estado = null): array {
+    public static function todas(?string $desde = null, ?string $hasta = null, ?string $estado = null, string $buscar = ''): array {
         $db = conectarDB();
         $query = "SELECT c.id, c.fecha, c.hora, c.total, c.estado, c.created_at,
                          u.nombre AS cliente_nombre, u.apellido AS cliente_apellido,
@@ -226,6 +226,25 @@ class Appointment {
         if (!empty($estado)) {
             $query .= " AND c.estado = :estado";
             $params[':estado'] = $estado;
+        }
+
+        // Búsqueda: "#12" = número de cita; otro texto = nombre, email o teléfono del cliente
+        if ($buscar !== '') {
+            if (preg_match('/^#(\d{1,9})$/', $buscar, $m)) {
+                $query .= " AND c.id = :citaId";
+                $params[':citaId'] = (int)$m[1];
+            } else {
+                $patron = '%' . addcslashes($buscar, '%_\\') . '%';
+                $condiciones = ["CONCAT_WS(' ', u.nombre, u.apellido) LIKE :bNombre",
+                                "u.email LIKE :bEmail",
+                                "u.telefono LIKE :bTelefono"];
+                $params += [':bNombre' => $patron, ':bEmail' => $patron, ':bTelefono' => $patron];
+                if (preg_match('/^\d{1,9}$/', $buscar)) {   // un número suelto también puede ser el # de cita
+                    $condiciones[] = "c.id = :citaId";
+                    $params[':citaId'] = (int)$buscar;
+                }
+                $query .= " AND (" . implode(' OR ', $condiciones) . ")";
+            }
         }
 
         $query .= " GROUP BY c.id ORDER BY c.fecha ASC, c.hora ASC";

@@ -6,6 +6,8 @@
 services:
   app:
     ports: !reset []          # la app ya no se publica directo: solo Caddy la ve
+    environment:
+      APP_URL: https://${DOMAIN}   # los enlaces de los correos apuntan al dominio
 
   caddy:
     image: caddy:2

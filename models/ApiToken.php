@@ -43,7 +43,7 @@ class ApiToken {
         }
         $db = conectarDB();
         $stmt = $db->prepare(
-            "SELECT u.id, u.nombre, u.apellido, u.email, u.admin, u.confirmado
+            "SELECT u.id, u.nombre, u.apellido, u.email, u.admin, u.confirmado, u.activo
              FROM api_tokens t
              INNER JOIN usuarios u ON u.id = t.usuarioId
              WHERE t.token_hash = :h AND t.expira > NOW()

@@ -9,7 +9,8 @@ class AdminController {
 
     /**
      * Dashboard: métricas + agenda por día o por semana (lunes a domingo), con filtro de estado.
-     *   ?url=admin/dashboard&vista=dia|semana&fecha=2026-12-10&estado=pendiente
+     *   ?url=admin/dashboard&vista=dia|semana&fecha=2026-12-10&estado=pendiente&q=texto
+     * Con texto de búsqueda (q) se consultan todas las fechas.
      */
     public function index() {
         requirePersonal();
@@ -17,6 +18,8 @@ class AdminController {
         $vista  = ($_GET['vista'] ?? 'dia') === 'semana' ? 'semana' : 'dia';
         $estado = in_array($_GET['estado'] ?? '', self::ESTADOS, true) ? $_GET['estado'] : '';
         $fecha  = self::fechaValida($_GET['fecha'] ?? '') ?? date('Y-m-d');
+
+        $buscar = self::textoBusqueda($_GET['q'] ?? '');
 
         $base = new DateTimeImmutable($fecha);
         if ($vista === 'semana') {
@@ -32,7 +35,10 @@ class AdminController {
 
         render('admin/index', [
             'metricas'     => Appointment::metricas(),
-            'citas'        => Appointment::todas($desde->format('Y-m-d'), $hasta->format('Y-m-d'), $estado ?: null),
+            'citas'        => $buscar !== ''
+                ? Appointment::todas(null, null, $estado ?: null, $buscar)
+                : Appointment::todas($desde->format('Y-m-d'), $hasta->format('Y-m-d'), $estado ?: null),
+            'buscar'       => $buscar,
             'modo'         => $vista,      // ojo: no llamarla 'vista', render() usa $vista para el archivo
             'filtroFecha'  => $fecha,
             'filtroEstado' => $estado,
@@ -70,7 +76,8 @@ class AdminController {
             'vista'  => ($_POST['retorno_vista'] ?? '') === 'semana' ? 'semana' : null,
             'fecha'  => self::fechaValida($_POST['retorno_fecha'] ?? ''),
             'estado' => in_array($_POST['retorno_estado'] ?? '', self::ESTADOS, true) ? $_POST['retorno_estado'] : null,
-        ]);
+            'q'      => self::textoBusqueda($_POST['retorno_q'] ?? ''),
+        ], fn($v) => $v !== null && $v !== '');
         redirect('admin/dashboard' . ($retorno ? '&' . http_build_query($retorno) : ''));
     }
 
@@ -79,10 +86,35 @@ class AdminController {
      */
     public function usuarios() {
         requireAdmin();
+        $filtros = self::filtrosUsuarios($_GET);
         render('admin/usuarios', [
-            'usuarios' => User::todos(),
+            'usuarios' => User::todos($filtros),
             'roles'    => User::ROLES,
+            'filtros'  => $filtros,
         ]);
+    }
+
+    /** Texto de búsqueda limpio (máximo 60 caracteres). Ignora valores que no sean texto. */
+    private static function textoBusqueda($valor): string {
+        return is_string($valor) ? mb_substr(trim($valor), 0, 60) : '';
+    }
+
+    /** Filtros válidos de la pantalla de usuarios: q, rol y estado. */
+    private static function filtrosUsuarios(array $entrada): array {
+        $rol    = $entrada['rol'] ?? '';
+        $estado = $entrada['estado'] ?? '';
+        return [
+            'q'      => self::textoBusqueda($entrada['q'] ?? ''),
+            'rol'    => in_array($rol, User::ROLES, true) ? $rol : '',
+            'estado' => in_array($estado, User::ESTADOS, true) ? $estado : '',
+        ];
+    }
+
+    /** Vuelve a la lista de usuarios conservando los filtros que venían en el formulario. */
+    private static function volverAUsuarios(): void {
+        parse_str(is_string($_POST['retorno'] ?? null) ? $_POST['retorno'] : '', $previos);
+        $filtros = array_filter(self::filtrosUsuarios($previos), fn($v) => $v !== '');
+        redirect('admin/usuarios' . ($filtros ? '&' . http_build_query($filtros) : ''));
     }
 
     /**
@@ -102,7 +134,25 @@ class AdminController {
             }
         }
 
-        redirect('admin/usuarios');
+        self::volverAUsuarios();
+    }
+
+    /** Confirmar a mano una cuenta (respaldo si el correo de confirmación no llega). */
+    public function confirmarUsuario() {
+        requireAdmin();
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            validarCsrf();
+
+            $id = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT);
+            if ($id && User::confirmarManual($id)) {
+                setAlerta('success', 'Cuenta confirmada.');
+            } elseif ($id) {
+                setAlerta('warning', 'La cuenta ya estaba confirmada o no existe.');
+            }
+        }
+
+        self::volverAUsuarios();
     }
 
     /**
@@ -129,7 +179,7 @@ class AdminController {
             }
         }
 
-        redirect('admin/usuarios');
+        self::volverAUsuarios();
     }
 
     /**
