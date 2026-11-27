@@ -15,10 +15,11 @@ class ReportController {
         render('reportes/index', [
             'filtros'   => $f,
             'errores'   => $errores,
-            'resumen'   => Report::resumen($f['inicio'], $f['fin']),
-            'servicios' => Report::ingresosPorServicio($f['inicio'], $f['fin']),
-            'porDia'    => Report::porDia($f['inicio'], $f['fin']),
-            'citas'     => Report::citas($f['inicio'], $f['fin'], $f['estado']),
+            'resumen'   => Report::resumen($f['inicio'], $f['fin'], $f['servicio']),
+            'servicios' => Report::ingresosPorServicio($f['inicio'], $f['fin'], $f['servicio']),
+            'porDia'    => Report::porDia($f['inicio'], $f['fin'], $f['servicio']),
+            'citas'     => Report::citas($f['inicio'], $f['fin'], $f['estado'], $f['servicio']),
+            'catalogo'  => Service::todos(),
         ]);
     }
 
@@ -33,24 +34,24 @@ class ReportController {
                 $cab   = ['ID', 'Servicio', 'Reservas', 'Realizados', 'Ingresos realizados', 'Por cobrar'];
                 $filas = array_map(fn($s) => [$s['id'], $s['nombre'], $s['reservas'], $s['realizados'],
                                               $s['ingresos_realizados'], $s['ingresos_por_cobrar']],
-                                   Report::ingresosPorServicio($f['inicio'], $f['fin']));
+                                   Report::ingresosPorServicio($f['inicio'], $f['fin'], $f['servicio']));
                 break;
             case 'dias':
                 $cab   = ['Fecha', 'Citas', 'Ingresos realizados'];
-                $filas = array_map(fn($d) => [$d['fecha'], $d['citas'], $d['ingresos']], Report::porDia($f['inicio'], $f['fin']));
+                $filas = array_map(fn($d) => [$d['fecha'], $d['citas'], $d['ingresos']], Report::porDia($f['inicio'], $f['fin'], $f['servicio']));
                 break;
             case 'citas':
                 $cab   = ['ID', 'Fecha', 'Hora', 'Cliente', 'Email', 'Servicios', 'Duración (min)', 'Estado', 'Total'];
                 $filas = array_map(fn($c) => [$c['id'], $c['fecha'], $c['hora'], $c['cliente'], $c['email'],
                                               $c['servicios'], $c['duracion'], $c['estado'], $c['total']],
-                                   Report::citas($f['inicio'], $f['fin'], $f['estado']));
+                                   Report::citas($f['inicio'], $f['fin'], $f['estado'], $f['servicio']));
                 break;
             default:
                 http_response_code(400);
                 exit('Tipo de reporte inválido');
         }
 
-        $nombre = sprintf('appsalon_%s_%s_a_%s.csv', $tipo, $f['inicio'], $f['fin']);
+        $nombre = sprintf('appsalon_%s_%s_a_%s%s.csv', $tipo, $f['inicio'], $f['fin'], $f['servicio'] ? '_servicio' . $f['servicio'] : '');
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="' . $nombre . '"');
         header('Cache-Control: no-store');
@@ -73,13 +74,14 @@ class ReportController {
         $autoload = __DIR__ . '/../vendor/autoload.php';
         if (!file_exists($autoload)) {
             setAlerta('danger', 'Falta TCPDF: ejecuta "composer install" en la raíz del proyecto.');
-            redirect('reportes/index&' . http_build_query(['inicio' => $f['inicio'], 'fin' => $f['fin']]));
+            redirect('reportes/index&' . http_build_query(array_filter($f)));
         }
         require_once $autoload;
 
-        $resumen   = Report::resumen($f['inicio'], $f['fin']);
-        $servicios = Report::ingresosPorServicio($f['inicio'], $f['fin']);
-        $citas     = Report::citas($f['inicio'], $f['fin'], $f['estado']);
+        $resumen   = Report::resumen($f['inicio'], $f['fin'], $f['servicio']);
+        $servicios = Report::ingresosPorServicio($f['inicio'], $f['fin'], $f['servicio']);
+        $citas     = Report::citas($f['inicio'], $f['fin'], $f['estado'], $f['servicio']);
+        $servicioFiltrado = $f['servicio'] ? (Service::buscar($f['servicio'])['nombre'] ?? null) : null;
 
         $pdf = new TCPDF('P', 'mm', 'LETTER', true, 'UTF-8', false);
         $pdf->SetCreator('AppSalon');
@@ -105,7 +107,7 @@ class ReportController {
 
     /**
      * Lee y valida los filtros GET. Por defecto: el mes en curso.
-     * @return array{0: array{inicio:string, fin:string, estado:?string}, 1: array<string,string>}
+     * @return array{0: array{inicio:string, fin:string, estado:?string, servicio:?int}, 1: array<string,string>}
      */
     private function filtros(): array {
         $errores = [];
@@ -114,6 +116,7 @@ class ReportController {
             'inicio' => $hoy->modify('first day of this month')->format('Y-m-d'),
             'fin'    => $hoy->modify('last day of this month')->format('Y-m-d'),
             'estado' => null,
+            'servicio' => null,
         ];
 
         foreach (['inicio', 'fin'] as $k) {
@@ -137,6 +140,9 @@ class ReportController {
 
         $estado = $_GET['estado'] ?? '';
         if (in_array($estado, self::ESTADOS, true)) { $f['estado'] = $estado; }
+
+        $servicio = filter_var($_GET['servicio'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if ($servicio && Service::buscar($servicio)) { $f['servicio'] = $servicio; }
 
         return [$f, $errores];
     }

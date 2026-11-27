@@ -4,37 +4,6 @@
 class Appointment {
 
     /**
-     * Valida si un horario está libre (no permitir sobreposición de citas).
-     * @param string $fecha Formato YYYY-MM-DD
-     * @param string $hora  Formato HH:MM:SS o HH:MM
-     * @param int|null $excluirCitaId Opcional al modificar
-     * @return bool true si está disponible, false si ya está ocupado
-     */
-    public static function disponible(string $fecha, string $hora, ?int $excluirCitaId = null): bool {
-        $db = conectarDB();
-        $query = "SELECT COUNT(*) FROM citas 
-                  WHERE fecha = :fecha 
-                    AND hora = :hora 
-                    AND estado != 'cancelada'";
-
-        if ($excluirCitaId !== null) {
-            $query .= " AND id != :excluirCitaId";
-        }
-
-        $stmt = $db->prepare($query);
-        $params = [
-            ':fecha' => $fecha,
-            ':hora'  => $hora
-        ];
-        if ($excluirCitaId !== null) {
-            $params[':excluirCitaId'] = $excluirCitaId;
-        }
-
-        $stmt->execute($params);
-        return ((int)$stmt->fetchColumn()) === 0;
-    }
-
-    /**
      * Crea una cita y asocia múltiples servicios usando una transacción.
      * @param int $usuarioId
      * @param string $fecha
@@ -197,27 +166,42 @@ class Appointment {
     }
 
     /**
-     * Devuelve la lista de horas que ya están reservadas para una fecha específica.
+     * Intervalos ocupados de un día: cada cita activa ocupa [hora, hora + suma de duraciones).
+     * Una cita sin servicios es un bloqueo administrativo y ocupa ValidadorCita::DURACION_SIN_SERVICIOS.
+     * @return array<int, array{id:int, inicio:string, fin:string, bloqueo:bool, cliente:?string}>
      */
-    public static function horasOcupadas(string $fecha, ?int $excluirCitaId = null): array {
-        $db = conectarDB();
-        $query = "SELECT hora FROM citas WHERE fecha = :fecha AND estado != 'cancelada'";
-        if ($excluirCitaId !== null) {
-            $query .= " AND id != :excluirCitaId";
-        }
-        $stmt = $db->prepare($query);
-        $params = [':fecha' => $fecha];
-        if ($excluirCitaId !== null) {
-            $params[':excluirCitaId'] = $excluirCitaId;
-        }
+    public static function intervalos(string $fecha, ?int $excluirCitaId = null): array {
+        $sql = "SELECT c.id, TIME_FORMAT(c.hora, '%H:%i') AS inicio,
+                       TIME_FORMAT(ADDTIME(c.hora, SEC_TO_TIME(COALESCE(SUM(s.duracion), :durDefecto) * 60)), '%H:%i') AS fin,
+                       COUNT(cs.id) = 0 AS bloqueo,
+                       CONCAT_WS(' ', u.nombre, u.apellido) AS cliente
+                  FROM citas c
+                  LEFT JOIN citasServicios cs ON cs.citaId = c.id
+                  LEFT JOIN servicios s       ON s.id = cs.servicioId
+                  LEFT JOIN usuarios u        ON u.id = c.usuarioId
+                 WHERE c.fecha = :fecha AND c.estado <> 'cancelada'"
+             . ($excluirCitaId !== null ? " AND c.id <> :excluir" : "") . "
+                 GROUP BY c.id, c.hora, u.nombre, u.apellido
+                 ORDER BY c.hora";
+        $params = [':fecha' => $fecha, ':durDefecto' => ValidadorCita::DURACION_SIN_SERVICIOS];
+        if ($excluirCitaId !== null) { $params[':excluir'] = $excluirCitaId; }
+
+        $stmt = conectarDB()->prepare($sql);
         $stmt->execute($params);
-        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+        return array_map(fn($f) => [
+            'id'      => (int)$f['id'],
+            'inicio'  => $f['inicio'],
+            'fin'     => $f['fin'],
+            'bloqueo' => (bool)$f['bloqueo'],
+            'cliente' => $f['cliente'] ?: null,
+        ], $stmt->fetchAll());
     }
 
     /**
-     * Obtiene todas las citas del salón con datos del cliente y servicios (con filtros opcionales).
+     * Agenda del salón entre dos fechas (incluidas), con datos del cliente y servicios.
+     * Excluye los bloqueos administrativos (citas sin servicios): esos se gestionan en Disponibilidad.
      */
-    public static function todas(?string $fecha = null, ?string $estado = null): array {
+    public static function todas(?string $desde = null, ?string $hasta = null, ?string $estado = null): array {
         $db = conectarDB();
         $query = "SELECT c.id, c.fecha, c.hora, c.total, c.estado, c.created_at,
                          u.nombre AS cliente_nombre, u.apellido AS cliente_apellido,
@@ -226,14 +210,18 @@ class Appointment {
                          SUM(s.duracion) AS duracion_total
                   FROM citas c
                   LEFT JOIN usuarios u ON c.usuarioId = u.id
-                  LEFT JOIN citasServicios cs ON c.id = cs.citaId
-                  LEFT JOIN servicios s ON cs.servicioId = s.id
+                  INNER JOIN citasServicios cs ON c.id = cs.citaId
+                  INNER JOIN servicios s ON cs.servicioId = s.id
                   WHERE 1=1";
 
         $params = [];
-        if (!empty($fecha)) {
-            $query .= " AND c.fecha = :fecha";
-            $params[':fecha'] = $fecha;
+        if (!empty($desde)) {
+            $query .= " AND c.fecha >= :desde";
+            $params[':desde'] = $desde;
+        }
+        if (!empty($hasta)) {
+            $query .= " AND c.fecha <= :hasta";
+            $params[':hasta'] = $hasta;
         }
         if (!empty($estado)) {
             $query .= " AND c.estado = :estado";
@@ -254,7 +242,8 @@ class Appointment {
         $hoy = date('Y-m-d');
 
         // 1. Citas de hoy
-        $stmtHoy = $db->prepare("SELECT COUNT(*) FROM citas WHERE fecha = :hoy AND estado != 'cancelada'");
+        $stmtHoy = $db->prepare("SELECT COUNT(*) FROM citas c WHERE c.fecha = :hoy AND c.estado != 'cancelada'
+                                   AND EXISTS (SELECT 1 FROM citasServicios cs WHERE cs.citaId = c.id)");
         $stmtHoy->execute([':hoy' => $hoy]);
         $citasHoy = (int)$stmtHoy->fetchColumn();
 
@@ -265,8 +254,8 @@ class Appointment {
         // 3. Citas pendientes por atender
         $citasPendientes = (int)$db->query("SELECT COUNT(*) FROM citas WHERE estado = 'pendiente'")->fetchColumn();
 
-        // 4. Clientes totales
-        $totalClientes = (int)$db->query("SELECT COUNT(*) FROM usuarios WHERE admin = 0")->fetchColumn();
+        // 4. Clientes totales (solo rol cliente: no cuenta administradores ni empleados)
+        $totalClientes = (int)$db->query("SELECT COUNT(*) FROM usuarios WHERE rol = 'cliente'")->fetchColumn();
 
         return [
             'citas_hoy'        => $citasHoy,
@@ -290,47 +279,30 @@ class Appointment {
     }
 
     /**
-     * Devuelve el estado de cada una de las 10 franjas horarias para un día específico
+     * Estado de cada franja horaria (según el horario configurado) para un día:
+     * 'libre', 'cita' (la cubre una cita de un cliente) o 'bloqueado' (bloqueo administrativo).
+     * Una franja está ocupada si se cruza con [inicio, fin) de alguna cita, no solo si coincide la hora de inicio.
      */
     public static function estadoHorariosDia(string $fecha): array {
-        $db = conectarDB();
-        $horasSalon = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
+        $intervalos = self::intervalos($fecha);
+        $resultado  = [];
 
-        // Consultar citas activas del día
-        $query = "SELECT c.id, c.hora, c.total, c.estado, c.usuarioId,
-                         u.nombre AS cliente_nombre, u.apellido AS cliente_apellido
-                  FROM citas c
-                  LEFT JOIN usuarios u ON c.usuarioId = u.id
-                  WHERE c.fecha = :fecha AND c.estado != 'cancelada'";
-        $stmt = $db->prepare($query);
-        $stmt->execute([':fecha' => $fecha]);
-        $citasDia = $stmt->fetchAll();
+        foreach (Horario::franjas($fecha) as $h) {
+            $finFranja = sprintf('%02d:00', (int)substr($h, 0, 2) + 1);
+            $ocupante  = null;
+            foreach ($intervalos as $iv) {
+                if ($iv['inicio'] < $finFranja && $h < $iv['fin']) { $ocupante = $iv; break; }
+            }
 
-        // Mapear por hora HH:MM
-        $citasPorHora = [];
-        foreach ($citasDia as $c) {
-            $h = substr($c['hora'], 0, 5);
-            $citasPorHora[$h] = $c;
-        }
-
-        $resultado = [];
-        foreach ($horasSalon as $h) {
-            if (isset($citasPorHora[$h])) {
-                $cita = $citasPorHora[$h];
-                $esBloqueoAdmin = ((float)$cita['total'] == 0.0 && empty($cita['cliente_nombre']));
-                $resultado[] = [
-                    'hora'    => $h,
-                    'estado'  => $esBloqueoAdmin ? 'bloqueado' : 'cita',
-                    'detalle' => $esBloqueoAdmin ? 'Bloqueo administrativo' : ($cita['cliente_nombre'] . ' ' . $cita['cliente_apellido']),
-                    'cita_id' => $cita['id']
-                ];
+            if ($ocupante === null) {
+                $resultado[] = ['hora' => $h, 'estado' => 'libre', 'detalle' => 'Disponible', 'cita_id' => null];
+            } elseif ($ocupante['bloqueo']) {
+                $resultado[] = ['hora' => $h, 'estado' => 'bloqueado', 'detalle' => 'Bloqueo administrativo',
+                                'cita_id' => $ocupante['id'], 'inicio' => $ocupante['inicio']];
             } else {
-                $resultado[] = [
-                    'hora'    => $h,
-                    'estado'  => 'libre',
-                    'detalle' => 'Disponible',
-                    'cita_id' => null
-                ];
+                $resultado[] = ['hora' => $h, 'estado' => 'cita',
+                                'detalle' => ($ocupante['cliente'] ?? 'Cliente') . ' (' . $ocupante['inicio'] . '–' . $ocupante['fin'] . ')',
+                                'cita_id' => $ocupante['id']];
             }
         }
         return $resultado;
@@ -352,17 +324,19 @@ class Appointment {
     }
 
     /**
-     * Desbloquea / libera un horario previamente bloqueado por la administración
+     * Libera un bloqueo administrativo. Solo borra citas SIN servicios: nunca puede borrar la cita de un cliente.
      */
     public static function liberarHorario(string $fecha, string $hora): bool {
         $db = conectarDB();
-        $query = "DELETE FROM citas 
-                  WHERE fecha = :fecha AND hora = :hora AND total = 0.00";
+        $query = "DELETE c FROM citas c
+                  WHERE c.fecha = :fecha AND c.hora = :hora
+                    AND NOT EXISTS (SELECT 1 FROM citasServicios cs WHERE cs.citaId = c.id)";
         $stmt = $db->prepare($query);
-        return $stmt->execute([
+        $stmt->execute([
             ':fecha' => $fecha,
             ':hora'  => $hora
         ]);
+        return $stmt->rowCount() > 0;
     }
 
 }

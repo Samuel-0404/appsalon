@@ -1,12 +1,11 @@
 <?php
 // Responsable: A  (entrega final)
-// Reglas de negocio de una cita en un solo lugar. Hoy las usa la API; la idea es que
-// AppointmentController también las use para que web y API validen exactamente igual.
+// Reglas de negocio de una cita en un solo lugar: las usan la web (AppointmentController)
+// y la API (ApiController), así que ambas validan exactamente igual.
 
 class ValidadorCita {
 
-    public const HORA_APERTURA = '09:00';
-    public const HORA_CIERRE   = '19:00';   // la última cita debe TERMINAR a esta hora como máximo
+    // El horario de atención (apertura/cierre por día) vive en la BD: ver models/Horario.php
     public const DURACION_SIN_SERVICIOS = 60; // minutos que ocupa un bloqueo administrativo (cita sin servicios)
 
     /**
@@ -21,27 +20,27 @@ class ValidadorCita {
         $errores = [];
         $datos   = [];
 
-        // ---- Fecha: formato estricto, no pasada, no domingo ----
+        // ---- Fecha: formato estricto, no pasada, día abierto según el horario, no festivo ----
         $fechaTxt = is_string($entrada['fecha'] ?? null) ? trim($entrada['fecha']) : '';
         $fecha = DateTimeImmutable::createFromFormat('!Y-m-d', $fechaTxt);
         if (!$fecha || $fecha->format('Y-m-d') !== $fechaTxt) {
             $errores['fecha'] = 'La fecha es obligatoria con formato AAAA-MM-DD.';
         } elseif ($fechaTxt < date('Y-m-d')) {
             $errores['fecha'] = 'No se permiten fechas pasadas.';
-        } elseif ($fecha->format('w') === '0') {
-            $errores['fecha'] = 'El salón no atiende los domingos.';
-        } elseif (($festivo = Festivo::buscar($fechaTxt)) !== null) {          // ← NUEVO
+        } elseif (($horarioDia = Horario::delDia($fechaTxt)) === null) {
+            $errores['fecha'] = 'El salón no atiende los ' . Horario::DIAS_PLURAL[(int)$fecha->format('w')] . '.';
+        } elseif (($festivo = Festivo::buscar($fechaTxt)) !== null) {
             $errores['fecha'] = "El $fechaTxt es festivo ($festivo): el salón no atiende.";
         } else {
             $datos['fecha'] = $fechaTxt;
         }
-        
-        // ---- Hora: HH:MM en punto, dentro del horario ----
+
+        // ---- Hora: HH:00, dentro del horario de ese día ----
         $horaTxt = is_string($entrada['hora'] ?? null) ? substr(trim($entrada['hora']), 0, 5) : '';
         if (!preg_match('/^([01]\d|2[0-3]):00$/', $horaTxt)) {
             $errores['hora'] = 'La hora es obligatoria con formato HH:00 (franjas de una hora).';
-        } elseif ($horaTxt < self::HORA_APERTURA || $horaTxt >= self::HORA_CIERRE) {
-            $errores['hora'] = 'El horario de atención es de ' . self::HORA_APERTURA . ' a ' . self::HORA_CIERRE . '.';
+        } elseif (isset($horarioDia) && ($horaTxt < $horarioDia['apertura'] || $horaTxt >= $horarioDia['cierre'])) {
+            $errores['hora'] = 'Ese día el horario de atención es de ' . $horarioDia['apertura'] . ' a ' . $horarioDia['cierre'] . '.';
         } elseif (isset($datos['fecha']) && $datos['fecha'] === date('Y-m-d') && $horaTxt <= date('H:i')) {
             $errores['hora'] = 'Esa hora de hoy ya pasó.';
         } else {
@@ -78,9 +77,9 @@ class ValidadorCita {
             $inicio = DateTimeImmutable::createFromFormat('Y-m-d H:i', $datos['fecha'] . ' ' . $datos['hora']);
             $fin    = $inicio->modify('+' . $datos['duracion'] . ' minutes');
 
-            if ($fin->format('Y-m-d H:i') > $datos['fecha'] . ' ' . self::HORA_CIERRE) {
+            if ($fin->format('Y-m-d H:i') > $datos['fecha'] . ' ' . $horarioDia['cierre']) {
                 $errores['hora'] = 'Los servicios duran ' . $datos['duracion'] . ' min y terminarían después del cierre ('
-                                 . self::HORA_CIERRE . ').';
+                                 . $horarioDia['cierre'] . ').';
             } elseif (self::haySolapamiento($datos['fecha'], $inicio->format('H:i:s'), $fin->format('H:i:s'), $excluirCitaId)) {
                 $errores['disponibilidad'] = 'El horario se cruza con otra cita o con un bloqueo del salón.';
             }

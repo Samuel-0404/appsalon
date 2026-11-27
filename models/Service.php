@@ -1,15 +1,15 @@
 <?php
 // Responsable: B
+// Catálogo de servicios. Los servicios no se borran físicamente: se desactivan (activo = 0) para
+// conservar el historial de citas y los reportes (citasServicios referencia a servicios).
 class Service {
-    // TODO: todos(), buscar($id), crear($datos), actualizar($id, $datos), eliminar($id)
-    // Usar conectarDB() y prepared statements.
     /**
      * Obtener todos los servicios activos
      * @return array
      */
     public static function todos(): array {
         $db = conectarDB();
-        $query = "SELECT * FROM servicios ORDER BY id ASC";
+        $query = "SELECT * FROM servicios WHERE activo = 1 ORDER BY id ASC";
         $stmt = $db->query($query);
         return $stmt->fetchAll();
     }
@@ -69,8 +69,9 @@ class Service {
      * @return bool
      */
     public static function eliminar($id): bool {
+        // Borrado lógico: un DELETE físico borraría (ON DELETE CASCADE) el servicio de las citas históricas
         $db = conectarDB();
-        $query = "DELETE FROM servicios WHERE id = :id";
+        $query = "UPDATE servicios SET activo = 0 WHERE id = :id";
         $stmt = $db->prepare($query);
         return $stmt->execute([':id' => $id]);
     }

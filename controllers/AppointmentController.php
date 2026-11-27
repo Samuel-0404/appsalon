@@ -1,122 +1,59 @@
 <?php
-
+// Entrega final: reservas del cliente (crear, reprogramar, cancelar, historial y correo)
 
 class AppointmentController {
 
     /**
-     * Formulario y procesamiento de una nueva cita
+     * Formulario y procesamiento de una nueva cita.
+     * Las reglas (horario del día, festivos, servicios activos, solapamiento por duración) están en
+     * ValidadorCita, el mismo validador de la API: web y API aceptan exactamente las mismas citas.
      */
     public function crear() {
         requireLogin();
 
         $servicios = Service::todos();
         $errores = [];
-        
+
         // Si viene un servicio preseleccionado desde el catálogo público
         $servicioIdParam = filter_var($_GET['servicio_id'] ?? null, FILTER_VALIDATE_INT);
-        $serviciosIniciales = $servicioIdParam ? [$servicioIdParam] : [];
 
         $cita = [
-            'fecha' => '',
-            'hora' => '',
-            'servicios' => $serviciosIniciales
+            'fecha'     => '',
+            'hora'      => '',
+            'servicios' => $servicioIdParam ? [$servicioIdParam] : []
         ];
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             validarCsrf();
+            $cita = self::datosDelFormulario($cita);
 
-            $cita['fecha'] = trim($_POST['fecha'] ?? '');
-            $cita['hora'] = trim($_POST['hora'] ?? '');
-            $serviciosSeleccionados = $_POST['servicios'] ?? [];
-            $cita['servicios'] = is_array($serviciosSeleccionados) ? $serviciosSeleccionados : [];
+            // El bloqueo por fecha serializa las reservas del mismo día: dos clientes no pueden
+            // validar y guardar la misma franja al mismo tiempo.
+            $citaId = self::conBloqueoDeFecha($cita['fecha'], function () use ($cita, &$errores, &$datos) {
+                [$errores, $datos] = ValidadorCita::validar($cita);
+                if ($errores) { return null; }
+                return Appointment::crear((int)$_SESSION['usuario_id'], $datos['fecha'], $datos['hora'],
+                                          $datos['total'], $datos['servicios']);
+            });
 
-            // 1. Validar servicios
-            if (empty($cita['servicios'])) {
-                $errores['servicios'] = 'Debes seleccionar al menos un servicio.';
-            }
+            if ($citaId) {
+                // Notificación por correo al email con el que se registró el cliente
+                require_once __DIR__ . '/../includes/Email.php';
+                $enviado = Email::enviarConfirmacionCita(
+                    $_SESSION['email'] ?? '',
+                    $_SESSION['nombre'] ?? 'Cliente',
+                    $datos['fecha'],
+                    $datos['hora'],
+                    $datos['nombres'],
+                    $datos['total'],
+                    $citaId
+                );
 
-            // 2. Validar fecha (no vacía, no pasada, no domingo, no festivo)
-            $hoy = date('Y-m-d');
-            if (empty($cita['fecha'])) {
-                $errores['fecha'] = 'Debes seleccionar una fecha.';
-            } elseif ($cita['fecha'] < $hoy) {
-                $errores['fecha'] = 'No puedes seleccionar una fecha en el pasado.';
-            } elseif (date('w', strtotime($cita['fecha'])) === '0') {
-                $errores['fecha'] = 'El salón no atiende los domingos.';
-            } elseif (($festivo = Festivo::buscar($cita['fecha'])) !== null) {
-                $errores['fecha'] = 'El ' . e($cita['fecha']) . ' es festivo (' . e($festivo) . '): el salón no atiende.';
-            }
-
-            // 3. Validar hora (entre 09:00 y 18:00)
-            if (empty($cita['hora'])) {
-                $errores['hora'] = 'Debes seleccionar una hora.';
-            } else {
-                $horaInt = (int)substr($cita['hora'], 0, 2);
-                if ($horaInt < 9 || $horaInt >= 19) {
-                    $errores['hora'] = 'El horario de atención es de 09:00 a 19:00.';
-                }
-            }
-
-            // 4. Validar disponibilidad (sin sobreposición de citas)
-            if (empty($errores)) {
-                if (!Appointment::disponible($cita['fecha'], $cita['hora'])) {
-                    $errores['disponibilidad'] = 'El horario seleccionado (' . e($cita['hora']) . ' el ' . e($cita['fecha']) . ') ya está ocupado. Por favor elige otra hora o fecha.';
-                }
-            }
-
-            // 5. Si todo es válido: calcular total real en servidor y guardar
-            if (empty($errores)) {
-                $total = 0.0;
-                $serviciosValidos = [];
-
-                foreach ($cita['servicios'] as $servId) {
-                    $servicioBD = Service::buscar((int)$servId);
-                    if ($servicioBD) {
-                        $total += (float)$servicioBD['precio'];
-                        $serviciosValidos[] = (int)$servicioBD['id'];
-                    }
-                }
-
-                if (!empty($serviciosValidos)) {
-                    $citaId = Appointment::crear(
-                        (int)$_SESSION['usuario_id'],
-                        $cita['fecha'],
-                        $cita['hora'],
-                        $total,
-                        $serviciosValidos
-                    );
-
-                    if ($citaId) {
-                        // 1. Obtener nombres de los servicios para el correo
-                        $nombresServicios = [];
-                        foreach ($serviciosValidos as $sId) {
-                            $serv = Service::buscar($sId);
-                            if ($serv) {
-                                $nombresServicios[] = $serv['nombre'];
-                            }
-                        }
-
-                        // 2. Enviar notificación por correo (Módulo 6 - Criterio Email)
-                        require_once __DIR__ . '/../includes/Email.php';
-                        $emailCliente = $_SESSION['email'] ?? 'cliente@appsalon.com';
-                        $nombreCliente = $_SESSION['nombre'] ?? 'Cliente';
-
-                        Email::enviarConfirmacionCita(
-                            $emailCliente,
-                            $nombreCliente,
-                            $cita['fecha'],
-                            $cita['hora'],
-                            $nombresServicios,
-                            $total,
-                            $citaId
-                        );
-
-                        setAlerta('success', '¡Tu cita #' . $citaId . ' fue confirmada con éxito! Te hemos enviado un correo con el resumen.');
-                        redirect('citas/mis-citas');
-                    } else {
-                        setAlerta('danger', 'Ocurrió un error al guardar tu cita. Intenta de nuevo.');
-                    }
-                }
+                setAlerta('success', '¡Tu cita #' . $citaId . ' fue registrada con éxito!'
+                    . ($enviado ? ' Te enviamos un correo con el resumen.' : ''));
+                redirect('citas/mis-citas');
+            } elseif (!$errores) {
+                setAlerta('danger', 'Ocurrió un error al guardar tu cita. Intenta de nuevo.');
             }
         }
 
@@ -127,8 +64,8 @@ class AppointmentController {
         ]);
     }
 
-        /**
-     * Modificar / reprogramar una cita existente
+    /**
+     * Modificar / reprogramar una cita existente (solo el dueño y solo si está pendiente)
      */
     public function editar() {
         requireLogin();
@@ -163,76 +100,21 @@ class AppointmentController {
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             validarCsrf();
+            $cita = self::datosDelFormulario($cita);
 
-            $cita['fecha'] = trim($_POST['fecha'] ?? '');
-            $cita['hora']  = trim($_POST['hora'] ?? '');
-            $serviciosSeleccionados = $_POST['servicios'] ?? [];
-            $cita['servicios'] = is_array($serviciosSeleccionados) ? $serviciosSeleccionados : [];
+            // excluirCitaId = $id: la cita no choca consigo misma al reprogramarla
+            $ok = self::conBloqueoDeFecha($cita['fecha'], function () use ($cita, $id, &$errores) {
+                [$errores, $datos] = ValidadorCita::validar($cita, $id);
+                if ($errores) { return false; }
+                return Appointment::actualizar($id, (int)$_SESSION['usuario_id'], $datos['fecha'], $datos['hora'],
+                                               $datos['total'], $datos['servicios']);
+            });
 
-            // 1. Validar servicios
-            if (empty($cita['servicios'])) {
-                $errores['servicios'] = 'Debes seleccionar al menos un servicio.';
-            }
-
-            // 2. Validar fecha (no vacía, no pasada, no domingo, no festivo)
-            $hoy = date('Y-m-d');
-            if (empty($cita['fecha'])) {
-                $errores['fecha'] = 'Debes seleccionar una fecha.';
-            } elseif ($cita['fecha'] < $hoy) {
-                $errores['fecha'] = 'No puedes seleccionar una fecha en el pasado.';
-            } elseif (date('w', strtotime($cita['fecha'])) === '0') {
-                $errores['fecha'] = 'El salón no atiende los domingos.';
-            } elseif (($festivo = Festivo::buscar($cita['fecha'])) !== null) {
-                $errores['fecha'] = 'El ' . e($cita['fecha']) . ' es festivo (' . e($festivo) . '): el salón no atiende.';
-            }
-
-            // 3. Validar hora
-            if (empty($cita['hora'])) {
-                $errores['hora'] = 'Debes seleccionar una hora.';
-            } else {
-                $horaInt = (int)substr($cita['hora'], 0, 2);
-                if ($horaInt < 9 || $horaInt >= 19) {
-                    $errores['hora'] = 'El horario de atención es de 09:00 a 19:00.';
-                }
-            }
-
-            // 4. Validar disponibilidad (excluyendo esta misma cita)
-            if (empty($errores)) {
-                if (!Appointment::disponible($cita['fecha'], $cita['hora'], $id)) {
-                    $errores['disponibilidad'] = 'El horario seleccionado (' . e($cita['hora']) . ') ya está ocupado por otra cita. Por favor elige otro horario.';
-                }
-            }
-
-            // 5. Calcular total en servidor y guardar actualización
-            if (empty($errores)) {
-                $total = 0.0;
-                $serviciosValidos = [];
-
-                foreach ($cita['servicios'] as $servId) {
-                    $servicioBD = Service::buscar((int)$servId);
-                    if ($servicioBD) {
-                        $total += (float)$servicioBD['precio'];
-                        $serviciosValidos[] = (int)$servicioBD['id'];
-                    }
-                }
-
-                if (!empty($serviciosValidos)) {
-                    $ok = Appointment::actualizar(
-                        $id,
-                        (int)$_SESSION['usuario_id'],
-                        $cita['fecha'],
-                        $cita['hora'],
-                        $total,
-                        $serviciosValidos
-                    );
-
-                    if ($ok) {
-                        setAlerta('success', '¡Tu cita #' . $id . ' fue reprogramada con éxito!');
-                        redirect('citas/mis-citas');
-                    } else {
-                        setAlerta('danger', 'Ocurrió un error al reprogramar la cita.');
-                    }
-                }
+            if ($ok) {
+                setAlerta('success', '¡Tu cita #' . $id . ' fue reprogramada con éxito!');
+                redirect('citas/mis-citas');
+            } elseif (!$errores) {
+                setAlerta('danger', 'Ocurrió un error al reprogramar la cita.');
             }
         }
 
@@ -243,6 +125,34 @@ class AppointmentController {
         ]);
     }
 
+    /** Lee fecha, hora y servicios del POST (sin validar: eso lo hace ValidadorCita). */
+    private static function datosDelFormulario(array $cita): array {
+        $cita['fecha'] = trim((string)($_POST['fecha'] ?? ''));
+        $cita['hora']  = trim((string)($_POST['hora'] ?? ''));
+        $servicios     = $_POST['servicios'] ?? [];
+        $cita['servicios'] = is_array($servicios) ? $servicios : [];
+        return $cita;
+    }
+
+    /**
+     * Ejecuta $fn con un bloqueo con nombre de MariaDB por fecha (GET_LOCK), igual que la API.
+     * Si no consigue el bloqueo en 5 s, no ejecuta nada y devuelve null.
+     */
+    private static function conBloqueoDeFecha(string $fecha, callable $fn) {
+        $db = conectarDB();
+        $nombre = 'appsalon_citas_' . preg_replace('/[^0-9-]/', '', $fecha);
+        $stmt = $db->prepare('SELECT GET_LOCK(:n, 5)');
+        $stmt->execute([':n' => $nombre]);
+        if ((int)$stmt->fetchColumn() !== 1) {
+            setAlerta('warning', 'El sistema está ocupado en este momento, intenta de nuevo.');
+            return null;
+        }
+        try {
+            return $fn();
+        } finally {
+            $db->prepare('SELECT RELEASE_LOCK(:n)')->execute([':n' => $nombre]);
+        }
+    }
 
     /**
      * Historial de citas del cliente logueado
@@ -339,18 +249,46 @@ class AppointmentController {
     }
 
     /**
-     * Endpoint interno para consultar horas ocupadas de una fecha vía JSON
+     * Endpoint interno (JSON) con la disponibilidad de un día para el calendario de reservas:
+     *   GET ?url=citas/horas-ocupadas&fecha=2026-12-10[&excluir_id=5]
+     *   { "abierto": true, "apertura": "09:00", "cierre": "19:00", "franjas": ["09:00", ...],
+     *     "intervalos": [{"inicio": "10:00", "fin": "12:00"}], "ocupadas": ["10:00", "11:00"] }
+     * "intervalos" permite al navegador descartar las horas donde la duración elegida no cabe.
      */
     public function horasOcupadas() {
-        header('Content-Type: application/json');
-        $fecha = $_GET['fecha'] ?? date('Y-m-d');
+        header('Content-Type: application/json; charset=utf-8');
+
+        $fecha = (string)($_GET['fecha'] ?? date('Y-m-d'));
+        $d = DateTimeImmutable::createFromFormat('!Y-m-d', $fecha);
+        if (!$d || $d->format('Y-m-d') !== $fecha) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Fecha inválida (AAAA-MM-DD)']);
+            exit;
+        }
         $excluirId = filter_var($_GET['excluir_id'] ?? null, FILTER_VALIDATE_INT) ?: null;
 
-        $horas = Appointment::horasOcupadas($fecha, $excluirId);
-        // Formatear a HH:MM (ej. "09:00")
-        $horasFormateadas = array_map(fn($h) => substr($h, 0, 5), $horas);
+        $horario    = Horario::delDia($fecha);
+        $franjas    = Horario::franjas($fecha);
+        $intervalos = array_map(fn($iv) => ['inicio' => $iv['inicio'], 'fin' => $iv['fin']],
+                                Appointment::intervalos($fecha, $excluirId));
 
-        echo json_encode(['ocupadas' => $horasFormateadas]);
+        // Compatibilidad: franjas que se cruzan con alguna cita (aunque no empiecen a esa hora)
+        $ocupadas = array_values(array_filter($franjas, function ($h) use ($intervalos) {
+            $finFranja = sprintf('%02d:00', (int)substr($h, 0, 2) + 1);
+            foreach ($intervalos as $iv) {
+                if ($iv['inicio'] < $finFranja && $h < $iv['fin']) { return true; }
+            }
+            return false;
+        }));
+
+        echo json_encode([
+            'abierto'    => $horario !== null,
+            'apertura'   => $horario['apertura'] ?? null,
+            'cierre'     => $horario['cierre'] ?? null,
+            'franjas'    => $franjas,
+            'intervalos' => $intervalos,
+            'ocupadas'   => $ocupadas,
+        ]);
         exit;
     }
 

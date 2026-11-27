@@ -40,7 +40,8 @@ services:
       - ./database/appsalon.sql:/docker-entrypoint-initdb.d/01_appsalon.sql:ro
       - ./database/migraciones/002_api_reportes.sql:/docker-entrypoint-initdb.d/02_api_reportes.sql:ro
       - ./database/migraciones/003_festivos.sql:/docker-entrypoint-initdb.d/03_festivos.sql:ro
-      - ./database/datos_prueba.sql:/docker-entrypoint-initdb.d/04_datos_prueba.sql:ro
+      - ./database/migraciones/004_roles_horario.sql:/docker-entrypoint-initdb.d/04_roles_horario.sql:ro
+      - ./database/datos_prueba.sql:/docker-entrypoint-initdb.d/05_datos_prueba.sql:ro
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s

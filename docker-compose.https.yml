@@ -1,0 +1,28 @@
+# Capa de producción con HTTPS. Se usa JUNTO al docker-compose.yml base:
+#   docker compose -f docker-compose.yml -f docker-compose.https.yml up -d --build
+# Requiere en .env:  DOMAIN=tu-subdominio.duckdns.org
+# Caddy recibe el tráfico en 80/443 y lo reenvía a "app" por la red interna de Docker.
+
+services:
+  app:
+    ports: !reset []          # la app ya no se publica directo: solo Caddy la ve
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    env_file: .env            # aporta DOMAIN al Caddyfile
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"         # HTTP/3
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data      # certificados: si se pierden, Let's Encrypt limita las reemisiones
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  caddy_data:
+  caddy_config:
