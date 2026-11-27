@@ -114,8 +114,12 @@ En XAMPP, si tu `config/config.php` es anterior, agrega `APP_URL` como en `confi
 - Front controller en `public/api.php` con rutas limpias `/api/...` (`public/.htaccess`), JSON con sobre
   uniforme y códigos HTTP 200/201/204/400/401/403/404/405/409/415/422.
 - Autenticación con token Bearer de 256 bits (solo se guarda su hash SHA-256; vence a las 8 h).
-- Endpoints: `POST /auth/login`, `POST /auth/logout`, `GET /servicios`, `GET /servicios/{id}`,
-  `GET /citas/usuario/{id}`, `GET /citas/{id}`, `POST /citas` y `PUT /citas/{id}`.
+- Todas las rutas requieren token, excepto `POST /auth/register` y `POST /auth/login`.
+- Endpoints: `POST /auth/register|login|logout|logout-all`, `GET|PUT /auth/profile`, `GET /tokens`,
+  `DELETE /tokens/{id}`, `GET /servicios`, `GET /servicios/{id}`, `GET /citas/usuario/{id}`, `GET /citas/{id}`,
+  `POST /citas` y `PUT /citas/{id}`.
+- **Swagger UI** (documentación interactiva): http://localhost:8080/swagger/ con Docker, o
+  http://localhost/appsalon/public/swagger/ con XAMPP. Requiere internet para cargar la interfaz.
 - Documentación en [`docs/API.md`](docs/API.md) y colección de Postman en `docs/AppSalon_API.postman_collection.json`.
 
 ### Reportes y exportación
@@ -138,9 +142,9 @@ En XAMPP, si tu `config/config.php` es anterior, agrega `APP_URL` como en `confi
 ```text
 config/        configuración (config.example.php lee variables de entorno) y conexión PDO
 controllers/   Auth, Service, Appointment, Admin, Report y Api
-models/        User, Service, Appointment, ValidadorCita, Horario, Festivo, Report, ApiToken
+models/        User, Cuenta, Service, Appointment, ValidadorCita, Horario, Festivo, Report, ApiToken
 views/         vistas por módulo + layout (Bootstrap 5)
-public/        front controllers (index.php y api.php), .htaccess, CSS y JS
+public/        front controllers (index.php y api.php), .htaccess, CSS, JS y swagger/
 database/      appsalon.sql (esquema completo), migraciones/ y datos_prueba.sql
 docker/        configuración de Apache, PHP y Caddy
 docs/          API.md, DESPLIEGUE.md y colección de Postman

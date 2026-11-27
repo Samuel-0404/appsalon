@@ -1,0 +1,2051 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "API REST de AppSalon",
+    "version": "1.1.0",
+    "description": "Autenticación, perfil, tokens, servicios y citas. Usa las mismas reglas de reserva que la web.\n\n**Cómo probar las rutas protegidas:** ejecuta `POST /auth/login` (o regístrate y confirma el correo), copia el `token` de la respuesta, pulsa **Authorize** y pégalo (sin la palabra Bearer). El token vence a las 8 horas.\n\n**Try it out** modifica los datos reales del entorno donde se abre esta página."
+  },
+  "servers": [
+    {
+      "url": "../api",
+      "description": "Este mismo servidor"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Autenticación"
+    },
+    {
+      "name": "Perfil"
+    },
+    {
+      "name": "Gestión de tokens"
+    },
+    {
+      "name": "Servicios"
+    },
+    {
+      "name": "Citas"
+    }
+  ],
+  "paths": {
+    "/auth/register": {
+      "post": {
+        "tags": [
+          "Autenticación"
+        ],
+        "summary": "Registrar un cliente",
+        "description": "Crea siempre una cuenta de **cliente** sin confirmar y envía el enlace de confirmación (vence en 24 horas). No devuelve token: primero hay que confirmar el correo. Un campo `rol` se ignora.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "nombre",
+                  "apellido",
+                  "email",
+                  "telefono",
+                  "password",
+                  "password_confirmation"
+                ],
+                "properties": {
+                  "nombre": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "apellido": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 60
+                  },
+                  "telefono": {
+                    "type": "string",
+                    "description": "10 dígitos"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "minLength": 6,
+                    "maxLength": 72
+                  },
+                  "password_confirmation": {
+                    "type": "string",
+                    "format": "password"
+                  }
+                }
+              },
+              "examples": {
+                "cliente": {
+                  "summary": "Cliente nuevo (cambia el email si ya existe)",
+                  "value": {
+                    "nombre": "Laura",
+                    "apellido": "Gómez",
+                    "email": "laura@ejemplo.com",
+                    "telefono": "3001234567",
+                    "password": "secreta123",
+                    "password_confirmation": "secreta123"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Cuenta creada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "usuario",
+                        "confirmacionEnviada"
+                      ],
+                      "properties": {
+                        "usuario": {
+                          "$ref": "#/components/schemas/Perfil"
+                        },
+                        "confirmacionEnviada": {
+                          "type": "boolean",
+                          "description": "false si el correo no se pudo enviar"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "JSON mal formado o que no es un objeto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 400,
+                    "mensaje": "JSON mal formado"
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "El cuerpo no se envió como application/json",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 415,
+                    "mensaje": "El cuerpo debe enviarse como application/json"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Errores de validación por campo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 422,
+                    "mensaje": "Datos inválidos",
+                    "detalles": {
+                      "email": "Este email ya está registrado."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": [
+          "Autenticación"
+        ],
+        "summary": "Obtener un token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password"
+                  }
+                }
+              },
+              "examples": {
+                "cliente": {
+                  "summary": "Cliente de prueba",
+                  "value": {
+                    "email": "cliente@appsalon.com",
+                    "password": "cliente123"
+                  }
+                },
+                "admin": {
+                  "summary": "Administrador de prueba",
+                  "value": {
+                    "email": "admin@appsalon.com",
+                    "password": "admin123"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token emitido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "token",
+                        "tipo",
+                        "expira",
+                        "usuario"
+                      ],
+                      "properties": {
+                        "token": {
+                          "type": "string"
+                        },
+                        "tipo": {
+                          "type": "string",
+                          "example": "Bearer"
+                        },
+                        "expira": {
+                          "type": "string",
+                          "example": "2026-11-27 23:00:00"
+                        },
+                        "usuario": {
+                          "$ref": "#/components/schemas/Usuario"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "JSON mal formado o que no es un objeto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 400,
+                    "mensaje": "JSON mal formado"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Credenciales incorrectas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 401,
+                    "mensaje": "Credenciales incorrectas"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "La cuenta no está confirmada o fue desactivada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 403,
+                    "mensaje": "La cuenta no está confirmada o fue desactivada"
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "El cuerpo no se envió como application/json",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 415,
+                    "mensaje": "El cuerpo debe enviarse como application/json"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Email inválido o contraseña vacía",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 422,
+                    "mensaje": "Datos inválidos",
+                    "detalles": {
+                      "email": "Email inválido."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": [
+          "Autenticación"
+        ],
+        "summary": "Revocar el token actual",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Token revocado (sin cuerpo)"
+          },
+          "401": {
+            "description": "Falta el token, o es inválido o vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 401,
+                    "mensaje": "Token inválido o vencido"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "La cuenta no está confirmada o fue desactivada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 403,
+                    "mensaje": "La cuenta no está confirmada o fue desactivada"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/logout-all": {
+      "post": {
+        "tags": [
+          "Autenticación"
+        ],
+        "summary": "Revocar todos mis tokens",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Todos los tokens revocados (sin cuerpo)"
+          },
+          "401": {
+            "description": "Falta el token, o es inválido o vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 401,
+                    "mensaje": "Token inválido o vencido"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "La cuenta no está confirmada o fue desactivada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 403,
+                    "mensaje": "La cuenta no está confirmada o fue desactivada"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/profile": {
+      "get": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "Ver mi perfil",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Perfil",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Perfil"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token, o es inválido o vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 401,
+                    "mensaje": "Token inválido o vencido"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "La cuenta no está confirmada o fue desactivada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 403,
+                    "mensaje": "La cuenta no está confirmada o fue desactivada"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Perfil"
+        ],
+        "summary": "Actualizar mi perfil",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Solo cambian los campos enviados. Cambiar `email` o `password` exige `password_actual`.\n\n- **Contraseña nueva:** se revocan los demás tokens; el actual sigue sirviendo.\n- **Email nuevo:** la cuenta queda sin confirmar, se revocan **todos** los tokens (incluido el actual) y se envía un enlace al correo nuevo.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nombre": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "apellido": {
+                    "type": "string",
+                    "maxLength": 60
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 60
+                  },
+                  "telefono": {
+                    "type": "string",
+                    "description": "10 dígitos"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "minLength": 6,
+                    "maxLength": 72
+                  },
+                  "password_confirmation": {
+                    "type": "string",
+                    "format": "password"
+                  },
+                  "password_actual": {
+                    "type": "string",
+                    "format": "password"
+                  }
+                }
+              },
+              "examples": {
+                "datos": {
+                  "summary": "Cambiar datos",
+                  "value": {
+                    "nombre": "Cliente",
+                    "telefono": "3001234567"
+                  }
+                },
+                "password": {
+                  "summary": "Cambiar contraseña",
+                  "value": {
+                    "password_actual": "secreta123",
+                    "password": "otraClave456",
+                    "password_confirmation": "otraClave456"
+                  }
+                },
+                "email": {
+                  "summary": "Cambiar email (cierra la sesión)",
+                  "value": {
+                    "password_actual": "secreta123",
+                    "email": "laura.nueva@ejemplo.com"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Perfil actualizado. confirmacionEnviada aparece solo si cambió el email",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "usuario"
+                      ],
+                      "properties": {
+                        "usuario": {
+                          "$ref": "#/components/schemas/Perfil"
+                        },
+                        "confirmacionEnviada": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "JSON mal formado o que no es un objeto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 400,
+                    "mensaje": "JSON mal formado"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token, o es inválido o vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 401,
+                    "mensaje": "Token inválido o vencido"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "La cuenta no está confirmada o fue desactivada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 403,
+                    "mensaje": "La cuenta no está confirmada o fue desactivada"
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "El cuerpo no se envió como application/json",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 415,
+                    "mensaje": "El cuerpo debe enviarse como application/json"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Datos inválidos, contraseña actual incorrecta o nada que actualizar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 422,
+                    "mensaje": "Datos inválidos",
+                    "detalles": {
+                      "password_actual": "Ingresa tu contraseña actual correcta."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tokens": {
+      "get": {
+        "tags": [
+          "Gestión de tokens"
+        ],
+        "summary": "Listar mis tokens vigentes",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Del más reciente al más antiguo. Nunca incluye el valor del token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Token"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token, o es inválido o vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 401,
+                    "mensaje": "Token inválido o vencido"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "La cuenta no está confirmada o fue desactivada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 403,
+                    "mensaje": "La cuenta no está confirmada o fue desactivada"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tokens/{id}": {
+      "delete": {
+        "tags": [
+          "Gestión de tokens"
+        ],
+        "summary": "Revocar uno de mis tokens",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Id del token (ver GET /tokens)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Token revocado (sin cuerpo)"
+          },
+          "401": {
+            "description": "Falta el token, o es inválido o vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 401,
+                    "mensaje": "Token inválido o vencido"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "La cuenta no está confirmada o fue desactivada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 403,
+                    "mensaje": "La cuenta no está confirmada o fue desactivada"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No existe o es de otro usuario",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 404,
+                    "mensaje": "Token no encontrado"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/servicios": {
+      "get": {
+        "tags": [
+          "Servicios"
+        ],
+        "summary": "Listar los servicios activos",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Falta el token, o es inválido o vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 401,
+                    "mensaje": "Token inválido o vencido"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "La cuenta no está confirmada o fue desactivada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 403,
+                    "mensaje": "La cuenta no está confirmada o fue desactivada"
+                  }
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Servicios ordenados por nombre",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Servicio"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/servicios/{id}": {
+      "get": {
+        "tags": [
+          "Servicios"
+        ],
+        "summary": "Consultar un servicio",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Id del servicio",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 1
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Falta el token, o es inválido o vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 401,
+                    "mensaje": "Token inválido o vencido"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "La cuenta no está confirmada o fue desactivada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 403,
+                    "mensaje": "La cuenta no está confirmada o fue desactivada"
+                  }
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Servicio",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Servicio"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No existe o está inactivo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 404,
+                    "mensaje": "Servicio no encontrado"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/citas/usuario/{id}": {
+      "get": {
+        "tags": [
+          "Citas"
+        ],
+        "summary": "Citas de un usuario",
+        "description": "Solo el propio usuario o un administrador.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Id del usuario (viene en la respuesta del login)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 2
+          },
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pendiente",
+                "confirmada",
+                "completada",
+                "cancelada"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Citas, de la más reciente a la más antigua",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Cita"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token, o es inválido o vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 401,
+                    "mensaje": "Token inválido o vencido"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Citas de otro usuario, o cuenta sin confirmar o desactivada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 403,
+                    "mensaje": "Solo puedes consultar tus propias citas"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Filtro de estado inválido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 422,
+                    "mensaje": "Filtro inválido",
+                    "detalles": {
+                      "estado": "Valores permitidos: pendiente, confirmada, completada, cancelada"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/citas": {
+      "post": {
+        "tags": [
+          "Citas"
+        ],
+        "summary": "Crear una cita",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "La fecha no puede ser pasada, el día debe estar abierto y no ser festivo. La cita debe terminar antes del cierre y no cruzarse con otra. El total lo calcula el servidor. Envía el correo de confirmación.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NuevaCita"
+              },
+              "examples": {
+                "cita": {
+                  "summary": "Cambia la fecha si ya pasó o hay cruce",
+                  "value": {
+                    "fecha": "2026-12-10",
+                    "hora": "10:00",
+                    "servicios": [
+                      1,
+                      3
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Cita creada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Cita"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "Ruta de la cita creada",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "JSON mal formado o que no es un objeto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 400,
+                    "mensaje": "JSON mal formado"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token, o es inválido o vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 401,
+                    "mensaje": "Token inválido o vencido"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "La cuenta no está confirmada o fue desactivada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 403,
+                    "mensaje": "La cuenta no está confirmada o fue desactivada"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Horario ocupado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 409,
+                    "mensaje": "Horario no disponible",
+                    "detalles": {
+                      "disponibilidad": "El horario se cruza con otra cita o con un bloqueo del salón."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "El cuerpo no se envió como application/json",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 415,
+                    "mensaje": "El cuerpo debe enviarse como application/json"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Errores de validación por campo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 422,
+                    "mensaje": "Datos inválidos",
+                    "detalles": {
+                      "fecha": "No se permiten fechas pasadas."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sistema ocupado; reintentar (cabecera Retry-After)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 503,
+                    "mensaje": "El sistema está ocupado, intenta de nuevo"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/citas/{id}": {
+      "get": {
+        "tags": [
+          "Citas"
+        ],
+        "summary": "Consultar una cita",
+        "description": "Su dueño o un administrador.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Id de la cita",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cita",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Cita"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token, o es inválido o vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 401,
+                    "mensaje": "Token inválido o vencido"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "La cuenta no está confirmada o fue desactivada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 403,
+                    "mensaje": "La cuenta no está confirmada o fue desactivada"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No existe, o es de otro cliente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 404,
+                    "mensaje": "Cita no encontrada"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Citas"
+        ],
+        "summary": "Reprogramar o cambiar el estado",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Id de la cita",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 1
+          }
+        ],
+        "description": "Para reprogramar se envían `fecha`, `hora` y `servicios`, y la cita debe estar pendiente. Un cliente solo puede cambiar el estado a `cancelada` si está pendiente. Un administrador puede cambiarlo mientras no esté cancelada ni completada.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fecha": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "hora": {
+                    "type": "string",
+                    "pattern": "^([01]\\d|2[0-3]):00$"
+                  },
+                  "servicios": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "estado": {
+                    "type": "string",
+                    "enum": [
+                      "pendiente",
+                      "confirmada",
+                      "completada",
+                      "cancelada"
+                    ]
+                  }
+                }
+              },
+              "examples": {
+                "reprogramar": {
+                  "summary": "Reprogramar",
+                  "value": {
+                    "fecha": "2026-12-10",
+                    "hora": "15:00",
+                    "servicios": [
+                      2
+                    ]
+                  }
+                },
+                "cancelar": {
+                  "summary": "Cancelar",
+                  "value": {
+                    "estado": "cancelada"
+                  }
+                },
+                "confirmar": {
+                  "summary": "Confirmar (solo admin)",
+                  "value": {
+                    "estado": "confirmada"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cita actualizada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "data"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Cita"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "JSON mal formado o que no es un objeto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 400,
+                    "mensaje": "JSON mal formado"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta el token, o es inválido o vencido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 401,
+                    "mensaje": "Token inválido o vencido"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Un cliente intenta un estado distinto de cancelada, o cuenta sin confirmar o desactivada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 403,
+                    "mensaje": "Un cliente solo puede cancelar sus citas"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No existe, o es de otro cliente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 404,
+                    "mensaje": "Cita no encontrada"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Horario ocupado o estado que no admite el cambio",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 409,
+                    "mensaje": "Solo se pueden reprogramar citas pendientes",
+                    "detalles": {
+                      "estado": "confirmada"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "El cuerpo no se envió como application/json",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 415,
+                    "mensaje": "El cuerpo debe enviarse como application/json"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Errores de validación por campo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 422,
+                    "mensaje": "Datos inválidos",
+                    "detalles": {
+                      "fecha": "No se permiten fechas pasadas."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sistema ocupado; reintentar (cabecera Retry-After)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "ok": false,
+                  "error": {
+                    "codigo": 503,
+                    "mensaje": "El sistema está ocupado, intenta de nuevo"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Token devuelto por POST /auth/login"
+      }
+    },
+    "schemas": {
+      "Usuario": {
+        "type": "object",
+        "required": [
+          "id",
+          "nombre",
+          "apellido",
+          "email",
+          "admin"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "apellido": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "admin": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Servicio": {
+        "type": "object",
+        "required": [
+          "id",
+          "nombre",
+          "descripcion",
+          "precio",
+          "duracion"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "nombre": {
+            "type": "string",
+            "example": "Corte de cabello"
+          },
+          "descripcion": {
+            "type": "string",
+            "nullable": true,
+            "example": "Corte para dama o caballero"
+          },
+          "precio": {
+            "type": "number",
+            "description": "COP",
+            "example": 25000
+          },
+          "duracion": {
+            "type": "integer",
+            "description": "Minutos",
+            "example": 45
+          }
+        }
+      },
+      "ServicioDeCita": {
+        "type": "object",
+        "required": [
+          "id",
+          "nombre",
+          "precio",
+          "duracion"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "precio": {
+            "type": "number"
+          },
+          "duracion": {
+            "type": "integer"
+          }
+        }
+      },
+      "Cita": {
+        "type": "object",
+        "required": [
+          "id",
+          "usuarioId",
+          "fecha",
+          "hora",
+          "estado",
+          "total",
+          "duracion",
+          "servicios",
+          "creada"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "usuarioId": {
+            "type": "integer",
+            "nullable": true
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date"
+          },
+          "hora": {
+            "type": "string",
+            "example": "10:00"
+          },
+          "estado": {
+            "type": "string",
+            "enum": [
+              "pendiente",
+              "confirmada",
+              "completada",
+              "cancelada"
+            ]
+          },
+          "total": {
+            "type": "number"
+          },
+          "duracion": {
+            "type": "integer"
+          },
+          "servicios": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServicioDeCita"
+            }
+          },
+          "creada": {
+            "type": "string",
+            "example": "2026-11-27 17:00:00"
+          }
+        }
+      },
+      "NuevaCita": {
+        "type": "object",
+        "required": [
+          "fecha",
+          "hora",
+          "servicios"
+        ],
+        "properties": {
+          "fecha": {
+            "type": "string",
+            "format": "date"
+          },
+          "hora": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):00$",
+            "description": "HH:00"
+          },
+          "servicios": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1
+          },
+          "usuarioId": {
+            "type": "integer",
+            "description": "Solo admin: reservar a nombre de un cliente"
+          }
+        }
+      },
+      "Perfil": {
+        "type": "object",
+        "required": [
+          "id",
+          "nombre",
+          "apellido",
+          "email",
+          "admin",
+          "telefono",
+          "rol",
+          "confirmado"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "apellido": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "admin": {
+            "type": "boolean"
+          },
+          "telefono": {
+            "type": "string",
+            "nullable": true
+          },
+          "rol": {
+            "type": "string",
+            "enum": [
+              "cliente",
+              "empleado",
+              "admin"
+            ]
+          },
+          "confirmado": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Token": {
+        "type": "object",
+        "required": [
+          "id",
+          "creado",
+          "expira",
+          "actual"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "creado": {
+            "type": "string",
+            "example": "2026-11-27 15:00:00"
+          },
+          "expira": {
+            "type": "string",
+            "example": "2026-11-27 23:00:00"
+          },
+          "actual": {
+            "type": "boolean",
+            "description": "true si es el token de esta petición"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": [
+          "ok",
+          "error"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "example": false
+          },
+          "error": {
+            "type": "object",
+            "required": [
+              "codigo",
+              "mensaje"
+            ],
+            "properties": {
+              "codigo": {
+                "type": "integer"
+              },
+              "mensaje": {
+                "type": "string"
+              },
+              "detalles": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

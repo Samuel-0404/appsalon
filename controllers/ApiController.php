@@ -20,6 +20,36 @@ class ApiController {
      *  Autenticación
      * ========================================================= */
 
+    /**
+     * POST /auth/register  {nombre, apellido, email, telefono, password, password_confirmation}  -> 201
+     * Siempre crea un cliente sin confirmar y no entrega token: primero debe abrir el enlace del correo.
+     */
+    public function registro(): void {
+        $body = self::cuerpoJson();
+        $u = [
+            'nombre'   => trim(self::texto($body, 'nombre')),
+            'apellido' => trim(self::texto($body, 'apellido')),
+            'email'    => mb_strtolower(trim(self::texto($body, 'email'))),
+            'telefono' => preg_replace('/\D/', '', self::texto($body, 'telefono')),
+        ];
+        $password = self::texto($body, 'password');
+        self::lanzarSiErrores(self::erroresDeCuenta(
+            Cuenta::validarRegistro($u, $password, self::texto($body, 'password_confirmation'))));
+
+        try {
+            $id = User::crear($u + ['password' => $password]);
+        } catch (PDOException $ex) {
+            if ($ex->getCode() !== '23000') { throw $ex; }
+            throw new ApiException(422, 'Datos inválidos', ['email' => 'Este email ya está registrado.']);
+        }
+        $enviado = Cuenta::enviarEnlace(['id' => $id] + $u, 'confirmacion');
+
+        self::responder(201, [
+            'usuario'             => self::perfilPublico(User::buscar($id)),
+            'confirmacionEnviada' => $enviado,
+        ]);
+    }
+
     /** POST /auth/login  {email, password}  -> 200 {token, tipo, expira, usuario} */
     public function login(): void {
         $body     = self::cuerpoJson();
@@ -56,12 +86,106 @@ class ApiController {
         self::responder(204);
     }
 
+    /** POST /auth/logout-all  -> 204 (revoca todos los tokens del usuario) */
+    public function logoutTodos(): void {
+        $yo = self::autenticar();
+        ApiToken::revocarTodos((int)$yo['id']);
+        self::responder(204);
+    }
+
     /* =========================================================
-     *  Servicios (público)
+     *  Perfil (requiere token)
+     * ========================================================= */
+
+    /** GET /auth/profile */
+    public function perfil(): void {
+        $yo = self::autenticar();
+        self::responder(200, self::perfilPublico(User::buscar((int)$yo['id'])));
+    }
+
+    /**
+     * PUT /auth/profile  {nombre?, apellido?, telefono?, email?, password?, password_confirmation?, password_actual?}
+     * Solo cambian los campos enviados. Cambiar email o contraseña exige password_actual.
+     */
+    public function actualizarPerfil(): void {
+        $yo     = self::autenticar();
+        $body   = self::cuerpoJson();
+        $id     = (int)$yo['id'];
+        $actual = User::buscar($id);
+
+        if (!array_intersect_key($body, array_flip(['nombre', 'apellido', 'telefono', 'email', 'password']))) {
+            throw new ApiException(422, 'Nada que actualizar', ['body' => 'Envía nombre, apellido, telefono, email o password.']);
+        }
+
+        $d = [];
+        foreach (['nombre', 'apellido', 'telefono', 'email'] as $campo) {
+            $d[$campo] = array_key_exists($campo, $body) ? trim(self::texto($body, $campo)) : (string)$actual[$campo];
+        }
+        $d['email'] = mb_strtolower($d['email']);
+        if (array_key_exists('telefono', $body)) { $d['telefono'] = preg_replace('/\D/', '', $d['telefono']); }
+
+        $cambiaEmail    = $d['email'] !== mb_strtolower($actual['email']);
+        $cambiaPassword = array_key_exists('password', $body);
+        $password       = self::texto($body, 'password');
+
+        // Se valida con las mismas reglas del registro, pero solo se reportan los campos que se envían.
+        $errores = self::erroresDeCuenta(Cuenta::validarRegistro(
+            $d, $password, self::texto($body, 'password_confirmation')));
+        if (!$cambiaEmail) { unset($errores['email']); } // su propio correo no cuenta como "ya registrado"
+        $errores = array_intersect_key($errores, $body + ($cambiaPassword ? ['password_confirmation' => true] : []));
+
+        if (($cambiaEmail || $cambiaPassword)
+            && !password_verify(self::texto($body, 'password_actual'), $actual['password'])) {
+            $errores['password_actual'] = 'Ingresa tu contraseña actual correcta.';
+        }
+        self::lanzarSiErrores($errores);
+
+        if ($cambiaPassword) { $d['password'] = $password; }
+        try {
+            User::actualizarPerfil($id, $d, $cambiaEmail);
+        } catch (PDOException $ex) {
+            if ($ex->getCode() !== '23000') { throw $ex; }
+            throw new ApiException(422, 'Datos inválidos', ['email' => 'Este email ya está registrado.']);
+        }
+
+        $enviado = null;
+        if ($cambiaEmail) {
+            // La cuenta queda sin confirmar: se cierran todas las sesiones de la API, incluida esta.
+            ApiToken::revocarTodos($id);
+            $enviado = Cuenta::enviarEnlace(['id' => $id] + $d, 'confirmacion');
+        } elseif ($cambiaPassword) {
+            ApiToken::revocarTodos($id, self::tokenDeCabecera());
+        }
+
+        $respuesta = ['usuario' => self::perfilPublico(User::buscar($id))];
+        if ($cambiaEmail) { $respuesta['confirmacionEnviada'] = $enviado; }
+        self::responder(200, $respuesta);
+    }
+
+    /* =========================================================
+     *  Gestión de tokens (cada usuario, solo los suyos)
+     * ========================================================= */
+
+    /** GET /tokens  -> 200 [{id, creado, expira, actual}] */
+    public function tokens(): void {
+        $yo = self::autenticar();
+        self::responder(200, ApiToken::deUsuario((int)$yo['id'], self::tokenDeCabecera()));
+    }
+
+    /** DELETE /tokens/{id}  -> 204.  Un token ajeno responde 404. */
+    public function revocarToken(int $id): void {
+        $yo = self::autenticar();
+        if (!ApiToken::revocarPorId($id, (int)$yo['id'])) { throw new ApiException(404, 'Token no encontrado'); }
+        self::responder(204);
+    }
+
+    /* =========================================================
+     *  Servicios (requieren token)
      * ========================================================= */
 
     /** GET /servicios  -> 200 [servicio] (solo activos) */
     public function servicios(): void {
+        self::autenticar();
         $filas = conectarDB()
             ->query("SELECT id, nombre, descripcion, precio, duracion FROM servicios WHERE activo = 1 ORDER BY nombre")
             ->fetchAll();
@@ -70,6 +194,7 @@ class ApiController {
 
     /** GET /servicios/{id} */
     public function servicio(int $id): void {
+        self::autenticar();
         $s = Service::buscar($id);
         if (!$s || !(int)$s['activo']) { throw new ApiException(404, 'Servicio no encontrado'); }
         self::responder(200, self::servicioPublico($s));
@@ -355,6 +480,28 @@ class ApiController {
             'descripcion' => $s['descripcion'],
             'precio'      => (float)$s['precio'],
             'duracion'    => (int)$s['duracion'],
+        ];
+    }
+
+    /** Valor de texto del cuerpo; cualquier otro tipo cuenta como vacío. */
+    private static function texto(array $body, string $campo): string {
+        return is_string($body[$campo] ?? null) ? $body[$campo] : '';
+    }
+
+    /** La web llama "password2" a la confirmación; en la API es "password_confirmation". */
+    private static function erroresDeCuenta(array $errores): array {
+        if (isset($errores['password2'])) {
+            $errores['password_confirmation'] = $errores['password2'];
+            unset($errores['password2']);
+        }
+        return $errores;
+    }
+
+    private static function perfilPublico(array $u): array {
+        return self::usuarioPublico($u) + [
+            'telefono'   => $u['telefono'],
+            'rol'        => $u['rol'],
+            'confirmado' => (bool)$u['confirmado'],
         ];
     }
 

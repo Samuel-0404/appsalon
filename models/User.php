@@ -53,6 +53,37 @@ class User {
         return (int) $db->lastInsertId();
     }
 
+    /** Busca un usuario por id (incluye el hash de la contraseña). */
+    public static function buscar(int $id): ?array {
+        $stmt = conectarDB()->prepare(
+            'SELECT id, nombre, apellido, email, password, telefono, admin, rol, confirmado, activo
+               FROM usuarios
+              WHERE id = :id'
+        );
+        $stmt->execute([':id' => $id]);
+        return $stmt->fetch() ?: null;
+    }
+
+    /**
+     * Actualiza el perfil propio. $d trae nombre, apellido, telefono, email y, opcionalmente, password.
+     * El rol y los estados no se tocan, salvo que cambie el correo: la cuenta vuelve a quedar sin confirmar.
+     * Cambiar correo o contraseña descarta cualquier enlace pendiente (pudo salir al correo anterior).
+     */
+    public static function actualizarPerfil(int $id, array $d, bool $cambiaEmail): void {
+        $campos = ['nombre = :nombre', 'apellido = :apellido', 'telefono = :telefono', 'email = :email'];
+        $params = [':nombre' => $d['nombre'], ':apellido' => $d['apellido'], ':telefono' => $d['telefono'],
+                   ':email' => $d['email'], ':id' => $id];
+        if (isset($d['password'])) {
+            $campos[] = 'password = :password';
+            $params[':password'] = password_hash($d['password'], PASSWORD_DEFAULT);
+        }
+        if ($cambiaEmail) { $campos[] = 'confirmado = 0'; }
+        if ($cambiaEmail || isset($d['password'])) {
+            array_push($campos, 'token = NULL', 'token_tipo = NULL', 'token_expira = NULL');
+        }
+        conectarDB()->prepare('UPDATE usuarios SET ' . implode(', ', $campos) . ' WHERE id = :id')->execute($params);
+    }
+
     /**
      * Usuarios para el panel admin. Filtros opcionales:
      *   q      -> nombre, apellido, email o teléfono
