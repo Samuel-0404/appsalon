@@ -11,6 +11,7 @@ services:
     env_file: .env
     environment:
       DB_HOST: db                       # nombre del servicio = hostname en la red de Docker
+      APP_URL: ${APP_URL:-http://localhost:${APP_PORT:-8080}}   # base de los enlaces de los correos
     ports:
       - "${APP_PORT:-8080}:80"
     volumes:
@@ -41,7 +42,8 @@ services:
       - ./database/migraciones/002_api_reportes.sql:/docker-entrypoint-initdb.d/02_api_reportes.sql:ro
       - ./database/migraciones/003_festivos.sql:/docker-entrypoint-initdb.d/03_festivos.sql:ro
       - ./database/migraciones/004_roles_horario.sql:/docker-entrypoint-initdb.d/04_roles_horario.sql:ro
-      - ./database/datos_prueba.sql:/docker-entrypoint-initdb.d/05_datos_prueba.sql:ro
+      - ./database/migraciones/005_cuentas.sql:/docker-entrypoint-initdb.d/05_cuentas.sql:ro
+      - ./database/datos_prueba.sql:/docker-entrypoint-initdb.d/06_datos_prueba.sql:ro
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s

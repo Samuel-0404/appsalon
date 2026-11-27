@@ -10,9 +10,45 @@
     </a>
 </div>
 
+<?php
+$retorno = http_build_query(array_filter($filtros, fn($v) => $v !== ''));
+$hayFiltros = $retorno !== '';
+?>
+<form action="<?= BASE_URL ?>/index.php" method="GET" class="card shadow-sm border-0 mb-4">
+    <div class="card-body p-3 row g-2 align-items-center">
+        <input type="hidden" name="url" value="admin/usuarios">
+        <div class="col-md">
+            <input type="search" name="q" class="form-control form-control-sm" maxlength="60"
+                   value="<?= e($filtros['q']) ?>" placeholder="🔎 Buscar por nombre, email o teléfono" aria-label="Buscar usuarios">
+        </div>
+        <div class="col-sm-auto">
+            <select name="rol" class="form-select form-select-sm" aria-label="Filtrar por rol">
+                <option value="">Todos los roles</option>
+                <?php foreach (['cliente' => 'Clientes', 'empleado' => 'Empleados', 'admin' => 'Administradores'] as $valor => $texto): ?>
+                    <option value="<?= $valor ?>" <?= $filtros['rol'] === $valor ? 'selected' : '' ?>><?= $texto ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="col-sm-auto">
+            <select name="estado" class="form-select form-select-sm" aria-label="Filtrar por estado">
+                <option value="">Todos los estados</option>
+                <?php foreach (['activo' => 'Activos', 'inactivo' => 'Inactivos', 'sin_confirmar' => 'Sin confirmar'] as $valor => $texto): ?>
+                    <option value="<?= $valor ?>" <?= $filtros['estado'] === $valor ? 'selected' : '' ?>><?= $texto ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div class="col-sm-auto d-flex gap-2">
+            <button type="submit" class="btn btn-sm btn-primary px-3">Filtrar</button>
+            <?php if ($hayFiltros): ?>
+                <a href="<?= BASE_URL ?>/index.php?url=admin/usuarios" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+            <?php endif; ?>
+        </div>
+    </div>
+</form>
+
 <div class="card shadow-sm border-0">
     <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
-        <h5 class="mb-0 fw-bold">Listado de Usuarios Registrados</h5>
+        <h5 class="mb-0 fw-bold"><?= $hayFiltros ? 'Resultados' : 'Listado de Usuarios Registrados' ?></h5>
         <span class="badge bg-secondary-subtle text-secondary-emphasis border">
             Total: <?= count($usuarios) ?> usuarios
         </span>
@@ -32,6 +68,9 @@
                 </tr>
             </thead>
             <tbody>
+                <?php if (!$usuarios): ?>
+                    <tr><td colspan="8" class="text-center text-muted py-4">Ningún usuario coincide con los filtros.</td></tr>
+                <?php endif; ?>
                 <?php foreach ($usuarios as $u): ?>
                     <tr>
                         <td class="text-muted fw-bold">#<?= e($u['id']) ?></td>
@@ -49,6 +88,7 @@
                                 <form action="<?= BASE_URL ?>/index.php?url=admin/usuario-rol" method="POST" class="d-flex">
                                     <?= csrfCampo() ?>
                                     <input type="hidden" name="id" value="<?= e($u['id']) ?>">
+                                    <input type="hidden" name="retorno" value="<?= e($retorno) ?>">
                                     <select name="rol" class="form-select form-select-sm" style="min-width: 130px;"
                                             aria-label="Rol de <?= e($u['nombre']) ?>"
                                             onchange="if (confirm('¿Cambiar el rol de este usuario?')) this.form.submit(); else this.value = this.dataset.actual;"
@@ -63,23 +103,34 @@
                             <?php endif; ?>
                         </td>
                         <td>
-                            <?php if (!empty($u['confirmado'])): ?>
-                                <span class="badge bg-success-subtle text-success border border-success-subtle">Activo</span>
-                            <?php else: ?>
+                            <?php if (empty($u['activo'])): ?>
                                 <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Inactivo</span>
+                            <?php elseif (empty($u['confirmado'])): ?>
+                                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Sin confirmar</span>
+                            <?php else: ?>
+                                <span class="badge bg-success-subtle text-success border border-success-subtle">Activo</span>
                             <?php endif; ?>
                         </td>
                         <td class="small text-muted">
                             <?= date('d/m/Y', strtotime($u['created_at'])) ?>
                         </td>
                         <td class="text-center">
+                            <?php if (empty($u['confirmado'])): ?>
+                                <form action="<?= BASE_URL ?>/index.php?url=admin/usuario-confirmar" method="POST" class="mb-1">
+                                    <?= csrfCampo() ?>
+                                    <input type="hidden" name="id" value="<?= e($u['id']) ?>">
+                                    <input type="hidden" name="retorno" value="<?= e($retorno) ?>">
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">Confirmar</button>
+                                </form>
+                            <?php endif; ?>
                             <?php if ($u['rol'] === 'admin'): ?>
                                 <span class="text-muted small fst-italic">Protegido</span>
                             <?php else: ?>
                                 <form action="<?= BASE_URL ?>/index.php?url=admin/usuario-toggle" method="POST">
                                     <?= csrfCampo() ?>
                                     <input type="hidden" name="id" value="<?= e($u['id']) ?>">
-                                    <?php if (!empty($u['confirmado'])): ?>
+                                    <input type="hidden" name="retorno" value="<?= e($retorno) ?>">
+                                    <?php if (!empty($u['activo'])): ?>
                                         <button type="submit" class="btn btn-sm btn-outline-danger" title="Desactivar cuenta">
                                             Desactivar
                                         </button>

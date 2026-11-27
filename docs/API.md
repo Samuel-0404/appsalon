@@ -37,7 +37,7 @@ Todas las respuestas, incluidos los errores, son `application/json; charset=utf-
 Detalles de seguridad:
 - El token tiene 256 bits aleatorios (`random_bytes(32)`). En la tabla `api_tokens` solo se guarda su hash SHA-256.
 - La API no usa cookies ni sesión, así que no es vulnerable a CSRF y no necesita token CSRF.
-- Las cuentas con `confirmado = 0` (sin confirmar o desactivadas desde el panel) reciben `403`.
+- Las cuentas sin confirmar (`confirmado = 0`) o desactivadas (`activo = 0`) reciben `403`.
 
 ## 4. Códigos HTTP
 

@@ -13,6 +13,14 @@ $err = fn(string $c) => isset($errores[$c]) ? '<div class="invalid-feedback">' .
           <div class="alert alert-danger"><?= e($errores['general']) ?></div>
         <?php endif; ?>
 
+        <?php if (!empty($sinConfirmar)): ?>
+          <form method="POST" action="<?= BASE_URL ?>/index.php?url=auth/reenviar" class="mb-3">
+            <?= csrfCampo() ?>
+            <input type="hidden" name="email" value="<?= e($usuario['email']) ?>">
+            <button type="submit" class="btn btn-outline-primary btn-sm w-100">Reenviar correo de confirmación</button>
+          </form>
+        <?php endif; ?>
+
         <form method="POST" action="<?= BASE_URL ?>/index.php?url=auth/login">
           <?= csrfCampo() ?>
 
@@ -23,12 +31,16 @@ $err = fn(string $c) => isset($errores[$c]) ? '<div class="invalid-feedback">' .
             <?= $err('email') ?>
           </div>
 
-          <div class="mb-4">
+          <div class="mb-2">
             <label for="password" class="form-label">Contraseña</label>
             <input type="password" id="password" name="password" class="form-control<?= $inv('password') ?>"
                    autocomplete="current-password" required>
             <?= $err('password') ?>
           </div>
+
+          <p class="text-end small mb-3">
+            <a href="<?= BASE_URL ?>/index.php?url=auth/olvide">¿Olvidaste tu contraseña?</a>
+          </p>
 
           <button type="submit" class="btn btn-dark w-100">Ingresar</button>
         </form>

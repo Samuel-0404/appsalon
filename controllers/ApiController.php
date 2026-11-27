@@ -36,7 +36,7 @@ class ApiController {
             // Mensaje genérico: no revela si el email existe
             throw new ApiException(401, 'Credenciales incorrectas');
         }
-        if (!$u['confirmado']) {
+        if (!$u['confirmado'] || !$u['activo']) {
             throw new ApiException(403, 'La cuenta no está confirmada o fue desactivada');
         }
 
@@ -253,8 +253,8 @@ class ApiController {
         if (!$u) {
             throw new ApiException(401, 'Token inválido o vencido', [], ['WWW-Authenticate' => 'Bearer realm="appsalon", error="invalid_token"']);
         }
-        if (!$u['confirmado']) {
-            throw new ApiException(403, 'La cuenta fue desactivada');
+        if (!$u['confirmado'] || !$u['activo']) {
+            throw new ApiException(403, 'La cuenta no está confirmada o fue desactivada');
         }
         $u['admin'] = (bool)$u['admin'];
         return $u;
@@ -272,7 +272,7 @@ class ApiController {
 
     private static function usuarioClienteValido($valor): int {
         $id = filter_var($valor, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-        $stmt = conectarDB()->prepare("SELECT id FROM usuarios WHERE id = :id AND admin = 0 AND confirmado = 1");
+        $stmt = conectarDB()->prepare("SELECT id FROM usuarios WHERE id = :id AND admin = 0 AND confirmado = 1 AND activo = 1");
         $stmt->execute([':id' => $id ?: 0]);
         if (!$stmt->fetchColumn()) {
             throw new ApiException(422, 'Datos inválidos', ['usuarioId' => 'El cliente no existe o está inactivo.']);

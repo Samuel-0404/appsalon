@@ -69,32 +69,40 @@
 <!-- 2. Agenda: vista por día o por semana + filtro de estado -->
 <?php
 $qsAgenda = fn(array $cambios = []) => http_build_query(array_filter(
-    array_merge(['url' => 'admin/dashboard', 'vista' => $modo, 'fecha' => $filtroFecha, 'estado' => $filtroEstado], $cambios)
+    array_merge(['url' => 'admin/dashboard', 'vista' => $modo, 'fecha' => $filtroFecha, 'estado' => $filtroEstado, 'q' => $buscar], $cambios),
+    fn($v) => $v !== null && $v !== ''
 ));
-$tituloRango = $modo === 'semana'
-    ? 'Semana del ' . date('d/m/Y', strtotime($desde)) . ' al ' . date('d/m/Y', strtotime($hasta))
-    : 'Día ' . date('d/m/Y', strtotime($desde));
+$tituloRango = match (true) {
+    $buscar !== ''     => 'Resultados para "' . $buscar . '" en todas las fechas',
+    $modo === 'semana' => 'Semana del ' . date('d/m/Y', strtotime($desde)) . ' al ' . date('d/m/Y', strtotime($hasta)),
+    default            => 'Día ' . date('d/m/Y', strtotime($desde)),
+};
 ?>
 <div class="card shadow-sm border-0 mb-4">
     <div class="card-body p-3">
         <div class="row g-2 align-items-center">
             <div class="col-lg-auto">
                 <div class="btn-group btn-group-sm" role="group" aria-label="Vista de la agenda">
-                    <a href="<?= BASE_URL ?>/index.php?<?= e($qsAgenda(['vista' => 'dia'])) ?>"
+                    <a href="<?= BASE_URL ?>/index.php?<?= e($qsAgenda(['vista' => 'dia', 'q' => null])) ?>"
                        class="btn <?= $modo === 'dia' ? 'btn-primary' : 'btn-outline-primary' ?>">📅 Día</a>
-                    <a href="<?= BASE_URL ?>/index.php?<?= e($qsAgenda(['vista' => 'semana'])) ?>"
+                    <a href="<?= BASE_URL ?>/index.php?<?= e($qsAgenda(['vista' => 'semana', 'q' => null])) ?>"
                        class="btn <?= $modo === 'semana' ? 'btn-primary' : 'btn-outline-primary' ?>">🗓️ Semana</a>
                 </div>
                 <div class="btn-group btn-group-sm ms-lg-2" role="group" aria-label="Navegar">
-                    <a href="<?= BASE_URL ?>/index.php?<?= e($qsAgenda(['fecha' => $anterior])) ?>" class="btn btn-outline-secondary" title="Anterior">‹</a>
-                    <a href="<?= BASE_URL ?>/index.php?<?= e($qsAgenda(['fecha' => date('Y-m-d')])) ?>" class="btn btn-outline-secondary">Hoy</a>
-                    <a href="<?= BASE_URL ?>/index.php?<?= e($qsAgenda(['fecha' => $siguiente])) ?>" class="btn btn-outline-secondary" title="Siguiente">›</a>
+                    <a href="<?= BASE_URL ?>/index.php?<?= e($qsAgenda(['fecha' => $anterior, 'q' => null])) ?>" class="btn btn-outline-secondary" title="Anterior">‹</a>
+                    <a href="<?= BASE_URL ?>/index.php?<?= e($qsAgenda(['fecha' => date('Y-m-d'), 'q' => null])) ?>" class="btn btn-outline-secondary">Hoy</a>
+                    <a href="<?= BASE_URL ?>/index.php?<?= e($qsAgenda(['fecha' => $siguiente, 'q' => null])) ?>" class="btn btn-outline-secondary" title="Siguiente">›</a>
                 </div>
             </div>
             <div class="col-lg">
                 <form action="<?= BASE_URL ?>/index.php" method="GET" class="row g-2 align-items-center justify-content-lg-end">
                     <input type="hidden" name="url" value="admin/dashboard">
                     <input type="hidden" name="vista" value="<?= e($modo) ?>">
+                    <div class="col-12">
+                        <input type="search" name="q" class="form-control form-control-sm" maxlength="60"
+                               value="<?= e($buscar) ?>" aria-label="Buscar citas"
+                               placeholder="🔎 Buscar por cliente, email, teléfono o #cita (en todas las fechas)">
+                    </div>
                     <div class="col-sm-auto">
                         <div class="input-group input-group-sm">
                             <span class="input-group-text bg-white">📅 Ir a:</span>
@@ -115,8 +123,8 @@ $tituloRango = $modo === 'semana'
                     </div>
                     <div class="col-sm-auto d-flex gap-2">
                         <button type="submit" class="btn btn-sm btn-primary px-3">Filtrar</button>
-                        <?php if (!empty($filtroEstado)): ?>
-                            <a href="<?= BASE_URL ?>/index.php?<?= e($qsAgenda(['estado' => null])) ?>" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+                        <?php if ($filtroEstado !== '' || $buscar !== ''): ?>
+                            <a href="<?= BASE_URL ?>/index.php?<?= e($qsAgenda(['estado' => null, 'q' => null])) ?>" class="btn btn-sm btn-outline-secondary">Limpiar</a>
                         <?php endif; ?>
                     </div>
                 </form>
@@ -136,7 +144,7 @@ $tituloRango = $modo === 'semana'
     <div class="table-responsive">
         <?php if (empty($citas)): ?>
             <div class="text-center py-5 text-muted">
-                <p class="mb-0">No hay citas <?= $modo === 'semana' ? 'esta semana' : 'este día' ?> con los filtros seleccionados.</p>
+                <p class="mb-0">No hay citas <?= $buscar !== '' ? 'que coincidan con la búsqueda' : ($modo === 'semana' ? 'esta semana' : 'este día') ?> con los filtros seleccionados.</p>
             </div>
         <?php else: ?>
             <table class="table table-hover align-middle mb-0">
@@ -191,6 +199,7 @@ $tituloRango = $modo === 'semana'
                                     <input type="hidden" name="retorno_fecha" value="<?= e($filtroFecha) ?>">
                                     <input type="hidden" name="retorno_vista" value="<?= e($modo) ?>">
                                     <input type="hidden" name="retorno_estado" value="<?= e($filtroEstado) ?>">
+                                    <input type="hidden" name="retorno_q" value="<?= e($buscar) ?>">
 
                                     <?php if ($c['estado'] === 'pendiente'): ?>
                                         <button type="submit" name="estado" value="confirmada" class="btn btn-sm btn-outline-success" title="Confirmar Cita">
