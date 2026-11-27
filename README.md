@@ -14,14 +14,14 @@ Hay dos formas de correr el proyecto. **Docker** es la recomendada (es la misma 
 Requisitos: Docker Engine con el plugin `compose`.
 
 ```bash
-git clone -b dev/julian https://github.com/Samuel-0404/appsalon.git
+git clone -b main https://github.com/Samuel-0404/appsalon.git
 cd appsalon
 cp .env.example .env          # completar claves de BD y de Brevo (formato CLAVE=valor)
 docker compose up -d --build
 ```
 
 Abrir http://localhost:8080. La base de datos se crea e importa sola la primera vez
-(`appsalon.sql` → migraciones `002`, `003`, `004` → `datos_prueba.sql`).
+(`appsalon.sql` → migraciones `002` a `005` → `datos_prueba.sql`).
 
 Despliegue en un servidor con HTTPS (Caddy + Let's Encrypt): ver [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md).
 
@@ -42,7 +42,17 @@ Despliegue en un servidor con HTTPS (Caddy + Let's Encrypt): ver [`docs/DESPLIEG
 /opt/lampp/bin/mysql -u root appsalon_mvc_php < database/migraciones/002_api_reportes.sql
 /opt/lampp/bin/mysql -u root appsalon_mvc_php < database/migraciones/003_festivos.sql
 /opt/lampp/bin/mysql -u root appsalon_mvc_php < database/migraciones/004_roles_horario.sql
+/opt/lampp/bin/mysql -u root appsalon_mvc_php < database/migraciones/005_cuentas.sql
 ```
+
+Con Docker y una base ya creada:
+
+```bash
+docker compose up -d --build
+docker compose exec db sh -c 'mariadb -uroot -p"$MARIADB_ROOT_PASSWORD" appsalon_mvc_php < /docker-entrypoint-initdb.d/05_cuentas.sql'
+```
+
+En XAMPP, si tu `config/config.php` es anterior, agrega `APP_URL` como en `config.example.php`.
 
 ---
 
@@ -59,6 +69,12 @@ Despliegue en un servidor con HTTPS (Caddy + Let's Encrypt): ver [`docs/DESPLIEG
 ---
 
 ## 3. Funcionalidades
+
+### Cuentas
+- **Confirmación por correo:** la cuenta nueva no puede ingresar hasta abrir el enlace (vence en 24 horas, se puede
+  reenviar). El administrador también puede confirmarla desde Usuarios.
+- **Recuperación de contraseña:** enlace de un solo uso que vence en 1 hora. La respuesta no revela si el correo existe.
+- Ambos requieren SMTP configurado.
 
 ### Sistema de citas
 - **Calendario interactivo** (Flatpickr) con los días cerrados y los **festivos de Colombia** bloqueados.
@@ -83,10 +99,11 @@ Despliegue en un servidor con HTTPS (Caddy + Let's Encrypt): ver [`docs/DESPLIEG
 |---|:---:|:---:|
 | Dashboard: citas de hoy, ingresos del mes, pendientes y total de clientes | ✅ | ✅ |
 | Agenda **por día o por semana** con filtro de estado y navegación | ✅ | ✅ |
+| Búsqueda de citas por cliente, email, teléfono o número, en todas las fechas | ✅ | ✅ |
 | Confirmar / completar / cancelar citas | ✅ | ✅ |
 | Disponibilidad: bloquear y liberar franjas horarias | ✅ | ✅ |
 | **Horario del salón** configurable por día de la semana (`admin/horario`) | | ✅ |
-| Usuarios: activar/desactivar y **asignar rol** (cliente, empleado, admin) | | ✅ |
+| Usuarios: buscar, filtrar, confirmar, activar/desactivar y **asignar rol** | | ✅ |
 | Servicios (CRUD), reportes y buzón de correos | | ✅ |
 
 - El rol nunca se toma de un formulario público: todo registro nace como `cliente` y solo un administrador lo

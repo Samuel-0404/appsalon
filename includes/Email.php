@@ -80,6 +80,29 @@ class Email {
     }
 
     /**
+     * Correo con un enlace de cuenta ('confirmacion' o 'recuperacion').
+     * No se guarda copia en el buzón: quien viera el enlace podría tomar la cuenta.
+     */
+    public static function enviarEnlaceCuenta(string $para, string $nombre, string $tipo, string $url, int $horas): bool {
+        [$asunto, $texto, $boton] = $tipo === 'confirmacion'
+            ? ['Confirma tu cuenta - AppSalon', 'Para activar tu cuenta, confirma tu correo:', 'Confirmar mi cuenta']
+            : ['Recupera tu contraseña - AppSalon', 'Recibimos una solicitud para cambiar tu contraseña:', 'Crear nueva contraseña'];
+        $vigencia = $horas === 1 ? '1 hora' : "$horas horas";
+        $enlace = htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
+
+        $html = '<div style="font-family: Arial, sans-serif; color: #334155; max-width: 580px; margin: 0 auto;">
+            <h2 style="color: #1e1e2d;">AppSalon</h2>
+            <p>Hola, ' . htmlspecialchars($nombre, ENT_QUOTES, 'UTF-8') . '.</p>
+            <p>' . $texto . '</p>
+            <p><a href="' . $enlace . '" style="display: inline-block; background: #4338ca; color: #ffffff; padding: 12px 20px; border-radius: 6px; text-decoration: none;">' . $boton . '</a></p>
+            <p style="font-size: 13px;">Si el botón no funciona, copia esta dirección:<br>' . $enlace . '</p>
+            <p style="font-size: 13px; color: #64748b;">El enlace vence en ' . $vigencia . '. Si no lo pediste, ignora este mensaje.</p>
+        </div>';
+
+        return self::enviarSmtp($para, $asunto, $html, $nombre);
+    }
+
+    /**
      * Envía un correo HTML por SMTP autenticado con PHPMailer.
      * Puerto 465 => TLS implícito (SMTPS); cualquier otro (587, 2525) => STARTTLS.
      * Nunca lanza excepciones: si falla, lo registra en el log de PHP y devuelve false,

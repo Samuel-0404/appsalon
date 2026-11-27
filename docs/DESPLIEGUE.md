@@ -21,7 +21,7 @@ docker compose ps             # app y db deben quedar "healthy"
 Abrir http://localhost:8080 (usuarios de prueba en el README).
 
 La BD se importa sola **solo la primera vez** (volumen vacío), en este orden:
-`appsalon.sql` → `002_api_reportes.sql` → `003_festivos.sql` → `004_roles_horario.sql` → `datos_prueba.sql`.
+`appsalon.sql` → `002_api_reportes.sql` → `003_festivos.sql` → `004_roles_horario.sql` → `005_cuentas.sql` → `datos_prueba.sql`.
 
 | Tarea | Comando |
 |---|---|
@@ -53,7 +53,7 @@ La copia HTML de cada correo queda además en el volumen `correos` (evidencia pa
    ```
 3. Volver a entrar por SSH, clonar el repositorio, crear `.env` (con `APP_PORT=80`) y levantar:
    ```bash
-   git clone -b dev/julian https://github.com/Samuel-0404/appsalon.git && cd appsalon
+   git clone -b main https://github.com/Samuel-0404/appsalon.git && cd appsalon
    cp .env.example .env && nano .env
    docker compose up -d --build
    ```
@@ -74,5 +74,7 @@ La copia HTML de cada correo queda además en el volumen `correos` (evidencia pa
 ```bash
 cd ~/appsalon && git pull
 docker compose up -d --build          # (agregar -f ... -f docker-compose.https.yml si usas HTTPS)
-# si el cambio trae una migración nueva, aplicarla (tabla de la sección 1)
+# si el cambio trae una migración nueva, aplicarla. Para 005 (hacer backup antes):
+docker compose exec db sh -c 'mariadb -uroot -p"$MARIADB_ROOT_PASSWORD" appsalon_mvc_php < /docker-entrypoint-initdb.d/05_cuentas.sql'
+# (con HTTPS, agrega -f docker-compose.yml -f docker-compose.https.yml después de "docker compose")
 ```

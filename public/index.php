@@ -18,6 +18,10 @@ $rutas = [
     'auth/login'    => ['AuthController', 'login'],
     'auth/registro' => ['AuthController', 'registro'],
     'auth/logout'   => ['AuthController', 'logout'],
+    'auth/confirmar'   => ['AuthController', 'confirmar'],
+    'auth/reenviar'    => ['AuthController', 'reenviar'],
+    'auth/olvide'      => ['AuthController', 'olvide'],
+    'auth/restablecer' => ['AuthController', 'restablecer'],
 
     // --- Bloque B: servicios ---
     'servicios/index'   => ['ServiceController', 'index'],
@@ -41,6 +45,7 @@ $rutas = [
     'admin/usuarios'       => ['AdminController', 'usuarios'],
     'admin/usuario-toggle' => ['AdminController', 'toggleUsuario'],
     'admin/usuario-rol'    => ['AdminController', 'cambiarRol'],
+    'admin/usuario-confirmar' => ['AdminController', 'confirmarUsuario'],
     'admin/horario'        => ['AdminController', 'horario'],
     'admin/disponibilidad' => ['AdminController', 'disponibilidad'],
     'admin/bloquear-hora'  => ['AdminController', 'bloquearHora'],

@@ -22,10 +22,14 @@ CREATE TABLE usuarios (
   telefono VARCHAR(10),
   admin TINYINT(1) DEFAULT 0,             -- espejo de rol = 'admin' (lo usa la API); se mantiene sincronizado
   rol ENUM('cliente','empleado','admin') NOT NULL DEFAULT 'cliente',
-  confirmado TINYINT(1) DEFAULT 0,
-  token VARCHAR(15),
+  confirmado TINYINT(1) DEFAULT 0,         -- 1 = verificó su correo
+  activo TINYINT(1) NOT NULL DEFAULT 1,     -- 0 = desactivado por un administrador
+  token VARCHAR(64),                        -- hash SHA-256 del enlace de confirmación o recuperación
+  token_tipo ENUM('confirmacion','recuperacion'),
+  token_expira DATETIME,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_usuarios_token (token)
 );
 
 CREATE TABLE servicios (

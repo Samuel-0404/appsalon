@@ -8,7 +8,7 @@
 -- Reglas que respeta (las mismas de ValidadorCita): sin domingos ni festivos (2-nov, 16-nov, 8-dic),
 -- franjas en punto de 09:00 a 18:00, la cita termina a las 19:00 como máximo y no hay solapamientos.
 -- Citas pasadas: completada/cancelada. Futuras (desde el 23-nov): pendiente/confirmada/cancelada.
--- felipe.arango@example.com está desactivado (confirmado = 0) para probar el panel de usuarios.
+-- felipe.arango@example.com está desactivado (activo = 0) para probar el panel de usuarios.
 USE appsalon_mvc_php;
 SET NAMES utf8mb4;
 
@@ -29,7 +29,8 @@ INSERT INTO usuarios (nombre, apellido, email, password, telefono, admin, confir
 ('Andrés', 'Zapata', 'andres.zapata@example.com', '$2y$10$BLINNud3.DNwzRIO9yRavOJn4YNOpKQe/3ga7vQsY6csT5tE/2lTG', '3145678901', 0, 1),
 ('Santiago', 'Muñoz', 'santiago.munoz@example.com', '$2y$10$BLINNud3.DNwzRIO9yRavOJn4YNOpKQe/3ga7vQsY6csT5tE/2lTG', '3018765432', 0, 1),
 ('Natalia', 'Quintero', 'natalia.quintero@example.com', '$2y$10$BLINNud3.DNwzRIO9yRavOJn4YNOpKQe/3ga7vQsY6csT5tE/2lTG', '3187654321', 0, 1),
-('Felipe', 'Arango', 'felipe.arango@example.com', '$2y$10$BLINNud3.DNwzRIO9yRavOJn4YNOpKQe/3ga7vQsY6csT5tE/2lTG', '3051234567', 0, 0);
+('Felipe', 'Arango', 'felipe.arango@example.com', '$2y$10$BLINNud3.DNwzRIO9yRavOJn4YNOpKQe/3ga7vQsY6csT5tE/2lTG', '3051234567', 0, 1);
+UPDATE usuarios SET activo = 0 WHERE email = 'felipe.arango@example.com';
 
 -- 3. Citas (total = 0 provisional; se calcula en el paso 5 desde los precios)
 INSERT INTO citas (fecha, hora, usuarioId, total, estado, created_at) VALUES
