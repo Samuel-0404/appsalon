@@ -33,12 +33,15 @@ $rutas = [
     'citas/cancelar'       => ['AppointmentController', 'cancelar'],
     'citas/horas-ocupadas' => ['AppointmentController', 'horasOcupadas'],
     'citas/ver-correo'     => ['AppointmentController', 'verCorreoCita'],
+    'citas/festivos'       => ['AppointmentController', 'festivos'],
 
-        // --- Bloque Admin Avanzado (Entrega Final)                        ---
+    // --- Bloque Admin Avanzado (Entrega Final) ---
     'admin/dashboard'      => ['AdminController', 'index'],
     'admin/cita-estado'    => ['AdminController', 'cambiarEstadoCita'],
     'admin/usuarios'       => ['AdminController', 'usuarios'],
     'admin/usuario-toggle' => ['AdminController', 'toggleUsuario'],
+    'admin/usuario-rol'    => ['AdminController', 'cambiarRol'],
+    'admin/horario'        => ['AdminController', 'horario'],
     'admin/disponibilidad' => ['AdminController', 'disponibilidad'],
     'admin/bloquear-hora'  => ['AdminController', 'bloquearHora'],
     'admin/liberar-hora'   => ['AdminController', 'liberarHora'],

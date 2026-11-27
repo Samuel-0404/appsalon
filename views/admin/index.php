@@ -1,27 +1,22 @@
 <?php /* Dashboard de Administración y Agenda - Entrega Final */ ?>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex flex-column flex-xl-row justify-content-between align-items-xl-center gap-3 mb-4">
     <div>
         <h1 class="h2 fw-bold text-dark mb-1">Panel de Control</h1>
         <p class="text-muted mb-0">Monitorea los ingresos, citas y la agenda en tiempo real.</p>
     </div>
-    <div class="d-flex gap-2">
-        <a href="<?= BASE_URL ?>/index.php?url=reportes/index" class="btn btn-dark btn-sm">
-            📈 Reportes
-        </a>
-        <a href="<?= BASE_URL ?>/index.php?url=admin/buzon" class="btn btn-outline-dark btn-sm">
-            📬 Buzón de Correos
-        </a>
+    <div class="d-flex flex-wrap gap-2">
         <a href="<?= BASE_URL ?>/index.php?url=admin/disponibilidad" class="btn btn-outline-dark btn-sm">
             ⏰ Disponibilidad Horaria
         </a>
-        <a href="<?= BASE_URL ?>/index.php?url=admin/usuarios" class="btn btn-outline-dark btn-sm">
-            👥 Gestionar Usuarios
-        </a>
-        <a href="<?= BASE_URL ?>/index.php?url=servicios/admin" class="btn btn-outline-dark btn-sm">
-            ✂️ Gestionar Servicios
-        </a>
-    </div> 
+        <?php if (esAdmin()): ?>
+            <a href="<?= BASE_URL ?>/index.php?url=reportes/index" class="btn btn-dark btn-sm">📈 Reportes</a>
+            <a href="<?= BASE_URL ?>/index.php?url=admin/horario" class="btn btn-outline-dark btn-sm">🗓️ Horario del Salón</a>
+            <a href="<?= BASE_URL ?>/index.php?url=admin/buzon" class="btn btn-outline-dark btn-sm">📬 Buzón de Correos</a>
+            <a href="<?= BASE_URL ?>/index.php?url=admin/usuarios" class="btn btn-outline-dark btn-sm">👥 Gestionar Usuarios</a>
+            <a href="<?= BASE_URL ?>/index.php?url=servicios/admin" class="btn btn-outline-dark btn-sm">✂️ Gestionar Servicios</a>
+        <?php endif; ?>
+    </div>
 </div>
 
 <!-- 1. Tarjetas de Estadísticas / Métricas -->
@@ -71,46 +66,69 @@
     </div>
 </div>
 
-<!-- 2. Filtros de Búsqueda de la Agenda -->
+<!-- 2. Agenda: vista por día o por semana + filtro de estado -->
+<?php
+$qsAgenda = fn(array $cambios = []) => http_build_query(array_filter(
+    array_merge(['url' => 'admin/dashboard', 'vista' => $modo, 'fecha' => $filtroFecha, 'estado' => $filtroEstado], $cambios)
+));
+$tituloRango = $modo === 'semana'
+    ? 'Semana del ' . date('d/m/Y', strtotime($desde)) . ' al ' . date('d/m/Y', strtotime($hasta))
+    : 'Día ' . date('d/m/Y', strtotime($desde));
+?>
 <div class="card shadow-sm border-0 mb-4">
     <div class="card-body p-3">
-        <form action="<?= BASE_URL ?>/index.php" method="GET" class="row g-2 align-items-center">
-            <input type="hidden" name="url" value="admin/dashboard">
-            
-            <div class="col-md-4">
-                <div class="input-group input-group-sm">
-                    <span class="input-group-text bg-white">📅 Fecha:</span>
-                    <input type="date" name="fecha" class="form-control" value="<?= e($filtroFecha) ?>">
+        <div class="row g-2 align-items-center">
+            <div class="col-lg-auto">
+                <div class="btn-group btn-group-sm" role="group" aria-label="Vista de la agenda">
+                    <a href="<?= BASE_URL ?>/index.php?<?= e($qsAgenda(['vista' => 'dia'])) ?>"
+                       class="btn <?= $modo === 'dia' ? 'btn-primary' : 'btn-outline-primary' ?>">📅 Día</a>
+                    <a href="<?= BASE_URL ?>/index.php?<?= e($qsAgenda(['vista' => 'semana'])) ?>"
+                       class="btn <?= $modo === 'semana' ? 'btn-primary' : 'btn-outline-primary' ?>">🗓️ Semana</a>
+                </div>
+                <div class="btn-group btn-group-sm ms-lg-2" role="group" aria-label="Navegar">
+                    <a href="<?= BASE_URL ?>/index.php?<?= e($qsAgenda(['fecha' => $anterior])) ?>" class="btn btn-outline-secondary" title="Anterior">‹</a>
+                    <a href="<?= BASE_URL ?>/index.php?<?= e($qsAgenda(['fecha' => date('Y-m-d')])) ?>" class="btn btn-outline-secondary">Hoy</a>
+                    <a href="<?= BASE_URL ?>/index.php?<?= e($qsAgenda(['fecha' => $siguiente])) ?>" class="btn btn-outline-secondary" title="Siguiente">›</a>
                 </div>
             </div>
-
-            <div class="col-md-4">
-                <div class="input-group input-group-sm">
-                    <span class="input-group-text bg-white">Estado:</span>
-                    <select name="estado" class="form-select">
-                        <option value="">-- Todos los estados --</option>
-                        <option value="pendiente" <?= $filtroEstado === 'pendiente' ? 'selected' : '' ?>>Pendientes</option>
-                        <option value="confirmada" <?= $filtroEstado === 'confirmada' ? 'selected' : '' ?>>Confirmadas</option>
-                        <option value="completada" <?= $filtroEstado === 'completada' ? 'selected' : '' ?>>Completadas</option>
-                        <option value="cancelada" <?= $filtroEstado === 'cancelada' ? 'selected' : '' ?>>Canceladas</option>
-                    </select>
-                </div>
+            <div class="col-lg">
+                <form action="<?= BASE_URL ?>/index.php" method="GET" class="row g-2 align-items-center justify-content-lg-end">
+                    <input type="hidden" name="url" value="admin/dashboard">
+                    <input type="hidden" name="vista" value="<?= e($modo) ?>">
+                    <div class="col-sm-auto">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-white">📅 Ir a:</span>
+                            <input type="date" name="fecha" class="form-control" value="<?= e($filtroFecha) ?>">
+                        </div>
+                    </div>
+                    <div class="col-sm-auto">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-white">Estado:</span>
+                            <select name="estado" class="form-select">
+                                <option value="">-- Todos --</option>
+                                <option value="pendiente" <?= $filtroEstado === 'pendiente' ? 'selected' : '' ?>>Pendientes</option>
+                                <option value="confirmada" <?= $filtroEstado === 'confirmada' ? 'selected' : '' ?>>Confirmadas</option>
+                                <option value="completada" <?= $filtroEstado === 'completada' ? 'selected' : '' ?>>Completadas</option>
+                                <option value="cancelada" <?= $filtroEstado === 'cancelada' ? 'selected' : '' ?>>Canceladas</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-sm-auto d-flex gap-2">
+                        <button type="submit" class="btn btn-sm btn-primary px-3">Filtrar</button>
+                        <?php if (!empty($filtroEstado)): ?>
+                            <a href="<?= BASE_URL ?>/index.php?<?= e($qsAgenda(['estado' => null])) ?>" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+                        <?php endif; ?>
+                    </div>
+                </form>
             </div>
-
-            <div class="col-md-4 d-flex gap-2">
-                <button type="submit" class="btn btn-sm btn-primary px-3">Filtrar Agenda</button>
-                <?php if (!empty($filtroFecha) || !empty($filtroEstado)): ?>
-                    <a href="<?= BASE_URL ?>/index.php?url=admin/dashboard" class="btn btn-sm btn-outline-secondary">Limpiar</a>
-                <?php endif; ?>
-            </div>
-        </form>
+        </div>
     </div>
 </div>
 
 <!-- 3. Tabla de Agenda de Citas -->
 <div class="card shadow-sm border-0">
     <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
-        <h5 class="mb-0 fw-bold">Agenda de Citas</h5>
+        <h5 class="mb-0 fw-bold">Agenda · <?= e($tituloRango) ?></h5>
         <span class="badge bg-secondary-subtle text-secondary-emphasis border">
             Total encontradas: <?= count($citas) ?>
         </span>
@@ -118,7 +136,7 @@
     <div class="table-responsive">
         <?php if (empty($citas)): ?>
             <div class="text-center py-5 text-muted">
-                <p class="mb-0">No se encontraron citas con los filtros seleccionados.</p>
+                <p class="mb-0">No hay citas <?= $modo === 'semana' ? 'esta semana' : 'este día' ?> con los filtros seleccionados.</p>
             </div>
         <?php else: ?>
             <table class="table table-hover align-middle mb-0">
@@ -146,11 +164,12 @@
                             <td class="text-muted fw-bold">#<?= e($c['id']) ?></td>
                             <td>
                                 <div class="fw-semibold text-dark"><?= date('d/m/Y', strtotime($c['fecha'])) ?></div>
+                                <small class="text-muted d-block"><?= e(Horario::DIAS[(int)date('w', strtotime($c['fecha']))]) ?></small>
                                 <small class="text-muted">⏱ <?= date('h:i A', strtotime($c['hora'])) ?></small>
                             </td>
                             <td>
-                                <div class="fw-semibold text-dark"><?= e($c['cliente_nombre'] . ' ' . $c['cliente_apellido']) ?></div>
-                                <small class="text-muted d-block">✉️ <?= e($c['cliente_email']) ?></small>
+                                <div class="fw-semibold text-dark"><?= e(trim(($c['cliente_nombre'] ?? '') . ' ' . ($c['cliente_apellido'] ?? '')) ?: 'Usuario eliminado') ?></div>
+                                <small class="text-muted d-block">✉️ <?= e($c['cliente_email'] ?? '—') ?></small>
                                 <small class="text-muted">📞 <?= e($c['cliente_telefono'] ?? 'Sin teléfono') ?></small>
                             </td>
                             <td>
@@ -170,6 +189,8 @@
                                     <?= csrfCampo() ?>
                                     <input type="hidden" name="id" value="<?= e($c['id']) ?>">
                                     <input type="hidden" name="retorno_fecha" value="<?= e($filtroFecha) ?>">
+                                    <input type="hidden" name="retorno_vista" value="<?= e($modo) ?>">
+                                    <input type="hidden" name="retorno_estado" value="<?= e($filtroEstado) ?>">
 
                                     <?php if ($c['estado'] === 'pendiente'): ?>
                                         <button type="submit" name="estado" value="confirmada" class="btn btn-sm btn-outline-success" title="Confirmar Cita">

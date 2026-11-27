@@ -1,4 +1,4 @@
-<?php?>
+<?php /* Reprogramar una cita pendiente - Entrega Final */ ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
@@ -84,6 +84,7 @@
                                min="<?= date('Y-m-d') ?>" 
                                value="<?= e($cita['fecha'] ?? '') ?>" 
                                required>
+                        <div class="invalid-feedback" id="fecha-error"></div>
                     </div>
 
                     <!-- Hora -->
@@ -92,14 +93,18 @@
                         <select class="form-select" id="hora" name="hora" required>
                             <option value="">-- Selecciona una hora --</option>
                             <?php
-                            $horas = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
-                            foreach ($horas as $h):
+                            // Unión de las franjas de todos los días abiertos; el servidor valida las del día elegido
+                            foreach (Horario::franjasSemana() as $h):
                                 $sel = (($cita['hora'] ?? '') === $h) ? 'selected' : '';
                             ?>
                                 <option value="<?= $h ?>" <?= $sel ?>><?= $h ?> (<?= ((int)$h < 12) ? $h.' AM' : (((int)$h === 12) ? '12:00 PM' : ((int)$h - 12).':00 PM') ?>)</option>
                             <?php endforeach; ?>
                         </select>
-                        <div class="form-text">Horario de 09:00 AM a 06:00 PM.</div>
+                        <div class="form-text">
+                            <?php foreach (Horario::semana() as $d): if (!$d['abierto']) continue; ?>
+                                <span class="me-2 text-nowrap"><?= e(mb_substr($d['nombre'], 0, 3)) ?> <?= e($d['apertura']) ?>–<?= e($d['cierre']) ?></span>
+                            <?php endforeach; ?>
+                        </div>
                     </div>
 
                     <!-- Resumen en vivo -->
@@ -161,15 +166,73 @@ document.addEventListener('DOMContentLoaded', () => {
         if (seleccionados.length === 0) {
             listaResumenEl.innerHTML = '<em class="text-danger">Debes tener al menos un servicio seleccionado.</em>';
         } else {
-            listaResumenEl.innerHTML = '<ul class="mb-0 ps-3">' + 
-                seleccionados.map(s => `<li>${s}</li>`).join('') + 
-                '</ul>';
+            // textContent (no innerHTML): el nombre del servicio nunca se interpreta como HTML
+            const ul = document.createElement('ul');
+            ul.className = 'mb-0 ps-3';
+            seleccionados.forEach(nombre => {
+                const li = document.createElement('li');
+                li.textContent = nombre;
+                ul.appendChild(li);
+            });
+            listaResumenEl.replaceChildren(ul);
         }
     }
 
     checks.forEach(check => {
         check.addEventListener('change', actualizarResumen);
     });
+
+    // --- Validación de días cerrados y festivos (consume citas/festivos) ---
+    const inputFecha = document.getElementById('fecha');
+    const fechaError = document.getElementById('fecha-error');
+    const cacheFestivos = {};   // anio => Promise<{ 'Y-m-d': nombre }>
+    const DIAS_CERRADOS = <?= json_encode(array_keys(array_filter(Horario::semana(), fn($h) => !$h['abierto']))) ?>;
+
+    function festivosDe(anio) {
+        // Se guarda la PROMESA, no el resultado: si se pide el mismo año dos veces
+        // seguidas, se reutiliza la misma petición en vez de lanzar otra
+        if (!cacheFestivos[anio]) {
+            cacheFestivos[anio] = fetch('<?= BASE_URL ?>/index.php?url=citas/festivos&anio=' + anio)
+                .then(res => {
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
+                .then(data => Object.fromEntries(data.festivos.map(f => [f.fecha, f.nombre])))
+                .catch(err => { delete cacheFestivos[anio]; throw err; });   // permite reintentar
+        }
+        return cacheFestivos[anio];
+    }
+
+    async function validarFecha() {
+        const valor = inputFecha.value;            // 'Y-m-d'
+        let mensaje = '';
+
+        if (valor) {
+            const [a, m, d] = valor.split('-').map(Number);
+            // new Date(a, m-1, d) = fecha LOCAL. new Date('2026-12-08') la interpreta en UTC
+            // y en Colombia (UTC-5) quedaría en el día anterior → getDay() incorrecto
+            const fecha = new Date(a, m - 1, d);
+
+            if (DIAS_CERRADOS.includes(fecha.getDay())) {
+                mensaje = 'El salón no atiende ese día de la semana.';
+            } else {
+                try {
+                    const festivos = await festivosDe(a);
+                    if (festivos[valor]) mensaje = `Es festivo (${festivos[valor]}): el salón no atiende.`;
+                } catch (err) {
+                    console.error('No se pudieron cargar los festivos:', err);   // el servidor igual valida
+                }
+            }
+        }
+
+        if (inputFecha.value !== valor) return;    // el usuario cambió la fecha mientras esperábamos
+        inputFecha.setCustomValidity(mensaje);     // '' = válido; con texto, el navegador bloquea el submit
+        inputFecha.classList.toggle('is-invalid', mensaje !== '');
+        fechaError.textContent = mensaje;
+    }
+
+    inputFecha.addEventListener('change', validarFecha);
+    validarFecha();   // por si la cita ya estaba en una fecha que ahora es festiva
 
     actualizarResumen();
 });
