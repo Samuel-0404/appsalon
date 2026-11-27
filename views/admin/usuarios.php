@@ -1,9 +1,9 @@
-<?php?>
+<?php /* Gestión de usuarios: activar/desactivar y asignar rol (solo administradores) */ ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1 class="h2 fw-bold text-dark mb-1">Gestión de Usuarios</h1>
-        <p class="text-muted mb-0">Controla las cuentas de acceso de clientes y administradores.</p>
+        <p class="text-muted mb-0">Activa o desactiva cuentas y asigna el rol de cada persona: cliente, empleado o administrador.</p>
     </div>
     <a href="<?= BASE_URL ?>/index.php?url=admin/dashboard" class="btn btn-outline-secondary btn-sm">
         ← Volver al Dashboard
@@ -41,10 +41,25 @@
                         <td><?= e($u['email']) ?></td>
                         <td><?= e($u['telefono'] ?? 'Sin registrar') ?></td>
                         <td>
-                            <?php if (!empty($u['admin'])): ?>
-                                <span class="badge bg-dark">👑 Administrador</span>
+                            <?php $esYo = (int)$u['id'] === (int)$_SESSION['usuario_id']; ?>
+                            <?php if ($esYo): ?>
+                                <span class="badge bg-dark">👑 Administrador (tú)</span>
                             <?php else: ?>
-                                <span class="badge bg-light text-dark border">Cliente</span>
+                                <!-- Cambiar rol: se envía al elegir una opción -->
+                                <form action="<?= BASE_URL ?>/index.php?url=admin/usuario-rol" method="POST" class="d-flex">
+                                    <?= csrfCampo() ?>
+                                    <input type="hidden" name="id" value="<?= e($u['id']) ?>">
+                                    <select name="rol" class="form-select form-select-sm" style="min-width: 130px;"
+                                            aria-label="Rol de <?= e($u['nombre']) ?>"
+                                            onchange="if (confirm('¿Cambiar el rol de este usuario?')) this.form.submit(); else this.value = this.dataset.actual;"
+                                            data-actual="<?= e($u['rol']) ?>">
+                                        <?php foreach ($roles as $r): ?>
+                                            <option value="<?= e($r) ?>" <?= $u['rol'] === $r ? 'selected' : '' ?>>
+                                                <?= ['cliente' => '🙂 Cliente', 'empleado' => '💇 Empleado', 'admin' => '👑 Administrador'][$r] ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </form>
                             <?php endif; ?>
                         </td>
                         <td>
@@ -58,7 +73,7 @@
                             <?= date('d/m/Y', strtotime($u['created_at'])) ?>
                         </td>
                         <td class="text-center">
-                            <?php if (!empty($u['admin'])): ?>
+                            <?php if ($u['rol'] === 'admin'): ?>
                                 <span class="text-muted small fst-italic">Protegido</span>
                             <?php else: ?>
                                 <form action="<?= BASE_URL ?>/index.php?url=admin/usuario-toggle" method="POST">

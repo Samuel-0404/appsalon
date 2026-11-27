@@ -35,10 +35,12 @@ class AuthController {
                     $_SESSION['usuario_id'] = (int) $u['id'];
                     $_SESSION['nombre']     = $u['nombre'];
                     $_SESSION['email']      = $u['email'];
-                    $_SESSION['admin']      = (bool) $u['admin'];
+                    $_SESSION['rol']        = $u['rol'] ?? ($u['admin'] ? 'admin' : 'cliente');
+                    $_SESSION['admin']      = $_SESSION['rol'] === 'admin';
 
                     setAlerta('success', '¡Bienvenido, ' . $u['nombre'] . '!');
-                    redirect($_SESSION['admin'] ? 'servicios/admin' : 'servicios/index');
+                    // Personal del salón -> panel; clientes -> catálogo
+                    redirect(esPersonal() ? 'admin/dashboard' : 'servicios/index');
                 }
             }
         }

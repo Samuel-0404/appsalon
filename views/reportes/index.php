@@ -6,17 +6,18 @@
  *
  * Variables que inyecta ReportController::index() mediante render()/extract():
  *
- * @var array{inicio: string, fin: string, estado: ?string} $filtros
+ * @var array{inicio: string, fin: string, estado: ?string, servicio: ?int} $filtros
  * @var array<string, string> $errores
  * @var array<string, mixed> $resumen
  * @var array<int, array<string, mixed>> $servicios
  * @var array<int, array{fecha: string, citas: int, ingresos: float}> $porDia
  * @var array<int, array<string, mixed>> $citas
+ * @var array<int, array<string, mixed>> $catalogo  servicios activos para el filtro
  */
 
 $cop = fn($v) => '$' . number_format((float)$v, 0, ',', '.');
 $qs  = fn(array $extra = []) => http_build_query(array_filter([
-    'inicio' => $filtros['inicio'], 'fin' => $filtros['fin'], 'estado' => $filtros['estado'],
+    'inicio' => $filtros['inicio'], 'fin' => $filtros['fin'], 'estado' => $filtros['estado'], 'servicio' => $filtros['servicio'],
 ] + $extra));
 $urlRep  = BASE_URL . '/index.php?url=reportes/';
 $estados = ['pendiente', 'confirmada', 'completada', 'cancelada'];
@@ -32,7 +33,10 @@ $badgeDe = fn(string $estado) => match ($estado) {
 <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
     <div>
         <h1 class="h2 fw-bold text-dark mb-1">Reportes</h1>
-        <p class="text-muted mb-0">Citas e ingresos del <?= date('d/m/Y', strtotime($filtros['inicio'])) ?> al <?= date('d/m/Y', strtotime($filtros['fin'])) ?>.</p>
+        <p class="text-muted mb-0">Citas e ingresos del <?= date('d/m/Y', strtotime($filtros['inicio'])) ?> al <?= date('d/m/Y', strtotime($filtros['fin'])) ?><?php
+            $nombreSrv = $filtros['servicio'] ? (array_column($catalogo, 'nombre', 'id')[$filtros['servicio']] ?? null) : null;
+            echo $nombreSrv ? ' · solo <strong>' . e($nombreSrv) . '</strong> (ingresos = precio del servicio)' : '';
+        ?>.</p>
     </div>
     <div class="d-flex flex-wrap gap-2">
         <a href="<?= $urlRep ?>csv&<?= e($qs(['tipo' => 'citas'])) ?>" class="btn btn-outline-dark btn-sm flex-fill flex-lg-grow-0">📋 CSV Citas</a>
@@ -92,19 +96,30 @@ $badgeDe = fn(string $estado) => match ($estado) {
         <form action="<?= BASE_URL ?>/index.php" method="GET" class="row g-2 align-items-center">
             <input type="hidden" name="url" value="reportes/index">
 
-            <div class="col-sm-6 col-lg-3">
+            <div class="col-sm-6 col-lg-2">
                 <div class="input-group input-group-sm">
                     <span class="input-group-text bg-white">📅 Desde:</span>
                     <input type="date" name="inicio" class="form-control" value="<?= e($filtros['inicio']) ?>" required>
                 </div>
             </div>
-            <div class="col-sm-6 col-lg-3">
+            <div class="col-sm-6 col-lg-2">
                 <div class="input-group input-group-sm">
                     <span class="input-group-text bg-white">📅 Hasta:</span>
                     <input type="date" name="fin" class="form-control" value="<?= e($filtros['fin']) ?>" required>
                 </div>
             </div>
             <div class="col-sm-6 col-lg-3">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-white">✂️ Servicio:</span>
+                    <select name="servicio" class="form-select">
+                        <option value="">Todos</option>
+                        <?php foreach ($catalogo as $srv): ?>
+                            <option value="<?= (int)$srv['id'] ?>" <?= (int)$filtros['servicio'] === (int)$srv['id'] ? 'selected' : '' ?>><?= e($srv['nombre']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+            <div class="col-sm-6 col-lg-2">
                 <div class="input-group input-group-sm">
                     <span class="input-group-text bg-white">📌 Estado:</span>
                     <select name="estado" class="form-select">
@@ -115,7 +130,7 @@ $badgeDe = fn(string $estado) => match ($estado) {
                     </select>
                 </div>
             </div>
-            <div class="col-sm-6 col-lg-3 d-flex gap-2">
+            <div class="col-sm-12 col-lg-3 d-flex gap-2">
                 <button type="submit" class="btn btn-sm btn-primary px-3 flex-fill text-nowrap">Filtrar</button>
                 <a href="<?= $urlRep ?>index" class="btn btn-sm btn-outline-secondary flex-fill text-nowrap">Mes Actual</a>
             </div>

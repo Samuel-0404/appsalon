@@ -12,9 +12,10 @@ RUN composer install --no-dev --no-interaction --no-progress --prefer-dist \
 # ---------- Etapa 2: aplicación ----------
 FROM php:8.3-apache
 
-# Extensiones: pdo_mysql (BD). curl, mbstring y openssl ya vienen en la imagen oficial.
+# Extensiones: pdo_mysql (BD) y opcache (caché de bytecode: PHP no recompila cada archivo en cada petición).
+# curl, mbstring y openssl ya vienen en la imagen oficial.
 # mod_rewrite: rutas limpias de la API (public/.htaccess). mod_headers: cabeceras de seguridad.
-RUN docker-php-ext-install pdo_mysql \
+RUN docker-php-ext-install pdo_mysql opcache \
  && a2enmod rewrite headers \
  && mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 

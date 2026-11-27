@@ -37,8 +37,18 @@
 <div class="card shadow-sm border-0">
     <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
         <h5 class="mb-0 fw-bold">Horarios para el día: <?= date('d/m/Y', strtotime($fecha)) ?></h5>
-        <small class="text-muted">Horario comercial (09:00 AM a 06:00 PM)</small>
+        <small class="text-muted">
+            <?= $horario ? 'Horario de atención: ' . e($horario['apertura']) . ' a ' . e($horario['cierre']) : 'Día cerrado' ?>
+            <?php if (esAdmin()): ?>· <a href="<?= BASE_URL ?>/index.php?url=admin/horario">Cambiar horario</a><?php endif; ?>
+        </small>
     </div>
+    <?php if (!$horario || $festivo): ?>
+        <div class="alert alert-info m-3 mb-0">
+            <?= $festivo
+                ? 'Este día es festivo (' . e($festivo) . '): el salón no recibe reservas.'
+                : 'El salón no atiende este día de la semana según el horario configurado.' ?>
+        </div>
+    <?php endif; ?>
     <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
@@ -98,19 +108,22 @@
                                 <form action="<?= BASE_URL ?>/index.php?url=admin/liberar-hora" method="POST">
                                     <?= csrfCampo() ?>
                                     <input type="hidden" name="fecha" value="<?= e($fecha) ?>">
-                                    <input type="hidden" name="hora" value="<?= e($h['hora']) ?>">
+                                    <input type="hidden" name="hora" value="<?= e($h['inicio'] ?? $h['hora']) ?>">
                                     <button type="submit" class="btn btn-sm btn-outline-success" title="Volver a habilitar este horario">
                                         🔓 Desbloquear
                                     </button>
                                 </form>
                             <?php else: ?>
-                                <a href="<?= BASE_URL ?>/index.php?url=admin/dashboard&fecha=<?= urlencode($fecha) ?>" class="btn btn-sm btn-outline-secondary">
+                                <a href="<?= BASE_URL ?>/index.php?url=admin/dashboard&fecha=<?= urlencode($fecha) ?>" class="btn btn-sm btn-outline-secondary" title="<?= e($h['detalle']) ?>">
                                     Ver en Agenda
                                 </a>
                             <?php endif; ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>
+                <?php if (empty($horarios)): ?>
+                    <tr><td colspan="4" class="text-center text-muted py-4">No hay franjas de atención para este día.</td></tr>
+                <?php endif; ?>
             </tbody>
         </table>
     </div>

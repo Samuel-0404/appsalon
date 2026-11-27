@@ -3,7 +3,8 @@
  * Sigue el estilo del panel de B (admin/index.php).
  *
  * Variables que inyecta ReportController::index() mediante render()/extract():
- * @var array{inicio: string, fin: string, estado: ?string} $f
+ * @var array{inicio: string, fin: string, estado: ?string, servicio: ?int} $f
+ * @var ?string $servicioFiltrado
  * @var array<string, string> $errores
  * @var array<string, mixed> $resumen
  * @var array<int, array<string, mixed>> $servicios
@@ -15,7 +16,7 @@ $cop = fn($v) => '$' . number_format((float)$v, 0, ',', '.');
 ?>
 <h1 style="font-size:18pt;color:#1e1e2d;">AppSalon · Reporte de citas e ingresos</h1>
 <p style="color:#64748b;">Período: <b><?= e($f['inicio']) ?></b> a <b><?= e($f['fin']) ?></b>
-<?= $f['estado'] ? ' · Estado: <b>' . e($f['estado']) . '</b>' : '' ?> · Generado: <?= e(date('Y-m-d H:i')) ?></p>
+<?= $f['estado'] ? ' · Estado: <b>' . e($f['estado']) . '</b>' : '' ?><?= !empty($servicioFiltrado) ? ' · Servicio: <b>' . e($servicioFiltrado) . '</b>' : '' ?> · Generado: <?= e(date('Y-m-d H:i')) ?></p>
 
 <table cellpadding="6" border="0">
   <tr style="background-color:#f1f5f9;">

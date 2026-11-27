@@ -1,5 +1,5 @@
 <?php
-// Responsable: A  -- Contratos que usa B: e(), setAlerta(), requireLogin(), requireAdmin()
+// Responsable: A  -- Contratos que usa B: e(), setAlerta(), requireLogin(), requireAdmin(), requirePersonal()
 
 session_set_cookie_params([
     'lifetime' => 0,                       // la cookie muere al cerrar el navegador
@@ -33,8 +33,15 @@ function redirect(string $ruta): void {
     exit;
 }
 
+/**
+ * Roles: cliente (reserva sus citas), empleado (agenda y disponibilidad) y admin (todo).
+ *   esAdmin()    -> solo administradores
+ *   esPersonal() -> administradores y empleados (personal del salón)
+ */
 function estaLogueado(): bool { return isset($_SESSION['usuario_id']); }
-function esAdmin(): bool { return !empty($_SESSION['admin']); }
+function rolActual(): string { return $_SESSION['rol'] ?? (!empty($_SESSION['admin']) ? 'admin' : 'cliente'); }
+function esAdmin(): bool { return estaLogueado() && rolActual() === 'admin'; }
+function esPersonal(): bool { return estaLogueado() && in_array(rolActual(), ['admin', 'empleado'], true); }
 
 function requireLogin(): void {
     if (!estaLogueado()) { setAlerta('warning', 'Debes iniciar sesión'); redirect('auth/login'); }
@@ -43,6 +50,12 @@ function requireLogin(): void {
 function requireAdmin(): void {
     requireLogin();
     if (!esAdmin()) { setAlerta('danger', 'No tienes permisos'); redirect('servicios/index'); }
+}
+
+/** Panel del salón: administradores y empleados. */
+function requirePersonal(): void {
+    requireLogin();
+    if (!esPersonal()) { setAlerta('danger', 'No tienes permisos'); redirect('servicios/index'); }
 }
 
 /** CSRF */
