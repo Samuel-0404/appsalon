@@ -19,12 +19,42 @@
     {
       "key": "citaId",
       "value": "1"
+    },
+    {
+      "key": "tokenId",
+      "value": "1"
     }
   ],
   "item": [
     {
       "name": "Auth",
       "item": [
+        {
+          "name": "Registro",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/auth/register",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Laura\",\n  \"apellido\": \"Gómez\",\n  \"email\": \"laura@ejemplo.com\",\n  \"telefono\": \"3001234567\",\n  \"password\": \"secreta123\",\n  \"password_confirmation\": \"secreta123\"\n}"
+            }
+          }
+        },
         {
           "name": "Login cliente",
           "request": {
@@ -124,6 +154,128 @@
               ]
             }
           }
+        },
+        {
+          "name": "Cerrar todas las sesiones",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/auth/logout-all",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "auth",
+                "logout-all"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Ver perfil",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/auth/profile",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "auth",
+                "profile"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Actualizar perfil",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/auth/profile",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "auth",
+                "profile"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Cliente\",\n  \"telefono\": \"3001234567\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tokens",
+      "item": [
+        {
+          "name": "Listar tokens",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/tokens",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "tokens"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Revocar token",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base}}/tokens/{{tokenId}}",
+              "host": [
+                "{{base}}"
+              ],
+              "path": [
+                "tokens",
+                "{{tokenId}}"
+              ]
+            }
+          }
         }
       ]
     },
@@ -134,7 +286,12 @@
           "name": "Listar servicios",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base}}/servicios",
               "host": [
@@ -150,7 +307,12 @@
           "name": "Ver servicio",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
             "url": {
               "raw": "{{base}}/servicios/1",
               "host": [

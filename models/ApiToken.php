@@ -54,6 +54,44 @@ class ApiToken {
         return $usuario ?: null;
     }
 
+    /**
+     * Tokens vigentes de un usuario. Nunca devuelve el token ni su hash.
+     * @param string $tokenActual para marcar cuál es el de la petición en curso
+     */
+    public static function deUsuario(int $usuarioId, string $tokenActual): array {
+        $stmt = conectarDB()->prepare(
+            "SELECT id, created_at, expira, token_hash = :h AS actual
+               FROM api_tokens
+              WHERE usuarioId = :u AND expira > NOW()
+              ORDER BY id DESC"
+        );
+        $stmt->execute([':h' => hash('sha256', $tokenActual), ':u' => $usuarioId]);
+        return array_map(fn($t) => [
+            'id'     => (int)$t['id'],
+            'creado' => $t['created_at'],
+            'expira' => $t['expira'],
+            'actual' => (bool)$t['actual'],
+        ], $stmt->fetchAll());
+    }
+
+    /** Revoca un token por id, solo si pertenece al usuario. */
+    public static function revocarPorId(int $id, int $usuarioId): bool {
+        $stmt = conectarDB()->prepare("DELETE FROM api_tokens WHERE id = :id AND usuarioId = :u");
+        $stmt->execute([':id' => $id, ':u' => $usuarioId]);
+        return $stmt->rowCount() > 0;
+    }
+
+    /** Revoca todos los tokens del usuario; con $excepto conserva ese token. */
+    public static function revocarTodos(int $usuarioId, ?string $excepto = null): void {
+        $sql = "DELETE FROM api_tokens WHERE usuarioId = :u";
+        $params = [':u' => $usuarioId];
+        if ($excepto !== null) {
+            $sql .= " AND token_hash <> :h";
+            $params[':h'] = hash('sha256', $excepto);
+        }
+        conectarDB()->prepare($sql)->execute($params);
+    }
+
     /** Revoca (borra) un token. Devuelve true si existía. */
     public static function revocar(string $token): bool {
         $stmt = conectarDB()->prepare("DELETE FROM api_tokens WHERE token_hash = :h");

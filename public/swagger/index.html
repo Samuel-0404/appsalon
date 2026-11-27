@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API de AppSalon - Swagger</title>
+  <!-- Swagger UI desde CDN, con versión fija e integridad: en esta página se pegan tokens de la API -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.36.0/swagger-ui.css"
+        integrity="sha384-z/AtSaOHGn5MJ5auAHXUypohywlIWLBZo1jeGmhdpVIbCnFhxAH92cwdV41oyINc" crossorigin="anonymous">
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <noscript>Activa JavaScript para ver la documentación, o abre <a href="openapi.json">openapi.json</a>.</noscript>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.36.0/swagger-ui-bundle.js"
+          integrity="sha384-fUpRgC19yPykTqzdrUbdAg8NTiu16NEKf9U12J+IJWCg8/1mEI8f2+PEIz60Wyd+" crossorigin="anonymous"></script>
+  <script>
+    SwaggerUIBundle({
+      url: 'openapi.json',
+      dom_id: '#swagger-ui',
+      validatorUrl: null   // no envía la especificación a un validador externo
+    });
+  </script>
+</body>
+</html>

@@ -21,8 +21,14 @@ header('Cache-Control: no-store');
 
 // 'MÉTODO patrón' => método del controlador. {id} = entero positivo.
 $rutas = [
+    'POST /auth/register'       => 'registro',
     'POST /auth/login'          => 'login',
     'POST /auth/logout'         => 'logout',
+    'POST /auth/logout-all'     => 'logoutTodos',
+    'GET /auth/profile'         => 'perfil',
+    'PUT /auth/profile'         => 'actualizarPerfil',
+    'GET /tokens'               => 'tokens',
+    'DELETE /tokens/{id}'       => 'revocarToken',
     'GET /servicios'            => 'servicios',
     'GET /servicios/{id}'       => 'servicio',
     'GET /citas/usuario/{id}'   => 'citasDeUsuario',

@@ -1,11 +1,21 @@
 # API REST de AppSalon
 
-API JSON sin estado (stateless) para consultar servicios y gestionar citas. Comparte la base de datos y las reglas de negocio con la aplicación web (`models/ValidadorCita.php`).
+API JSON sin estado (stateless) para autenticarse, administrar la cuenta, consultar servicios y gestionar citas. Comparte la base de datos y las reglas de negocio con la aplicación web (`models/ValidadorCita.php`).
+
+## Documentación interactiva (Swagger)
+
+| Entorno | Dirección |
+|---|---|
+| Docker | `http://localhost:8080/swagger/` |
+| XAMPP | `http://localhost/appsalon/public/swagger/` |
+
+La especificación OpenAPI está en `public/swagger/openapi.json`. Para probar rutas protegidas: ejecutar el login, pulsar **Authorize** y pegar el token. Si cambia un endpoint, hay que actualizar ese archivo.
 
 ## 1. URL base
 
 | Entorno | URL base |
 |---|---|
+| Docker | `http://localhost:8080/api` |
 | XAMPP con `mod_rewrite` (por defecto) | `http://localhost/appsalon/public/api` |
 | Sin `mod_rewrite` | `http://localhost/appsalon/public/api.php` |
 | Servidor embebido (`php -S localhost:8000 -t public`) | `http://localhost:8000/api.php` |
@@ -30,9 +40,12 @@ Todas las respuestas, incluidos los errores, son `application/json; charset=utf-
 
 ## 3. Autenticación
 
-1. `POST /auth/login` con email y contraseña devuelve un `token`.
-2. En cada petición protegida se envía la cabecera `Authorization: Bearer <token>`.
-3. El token vence a las **8 horas**. `POST /auth/logout` lo revoca antes.
+Todas las rutas requieren token, excepto `POST /auth/register` y `POST /auth/login`.
+
+1. Si no tienes cuenta, `POST /auth/register` y abre el enlace de confirmación que llega al correo.
+2. `POST /auth/login` con email y contraseña devuelve un `token`.
+3. En cada petición protegida se envía la cabecera `Authorization: Bearer <token>`.
+4. El token vence a las **8 horas**. Antes se puede revocar con `POST /auth/logout` (el actual), `POST /auth/logout-all` (todos) o `DELETE /tokens/{id}` (uno).
 
 Detalles de seguridad:
 - El token tiene 256 bits aleatorios (`random_bytes(32)`). En la tabla `api_tokens` solo se guarda su hash SHA-256.
@@ -44,8 +57,8 @@ Detalles de seguridad:
 | Código | Cuándo |
 |---|---|
 | 200 OK | Consulta o actualización correcta |
-| 201 Created | Cita creada. Incluye la cabecera `Location` |
-| 204 No Content | Logout correcto |
+| 201 Created | Cuenta o cita creada. La cita incluye la cabecera `Location` |
+| 204 No Content | Logout o revocación de tokens correcta |
 | 400 Bad Request | JSON mal formado o que no es un objeto |
 | 401 Unauthorized | Falta el token, o es inválido o vencido. Incluye `WWW-Authenticate: Bearer` |
 | 403 Forbidden | Sin permiso: datos de otro usuario, cliente que cambia un estado distinto de cancelar, o cuenta desactivada |
@@ -60,14 +73,51 @@ Detalles de seguridad:
 
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|
+| POST | `/auth/register` | No | Registrar un cliente |
 | POST | `/auth/login` | No | Obtener token |
 | POST | `/auth/logout` | Sí | Revocar el token actual |
-| GET | `/servicios` | No | Servicios activos |
-| GET | `/servicios/{id}` | No | Un servicio |
+| POST | `/auth/logout-all` | Sí | Revocar todos mis tokens |
+| GET | `/auth/profile` | Sí | Ver mi perfil |
+| PUT | `/auth/profile` | Sí | Actualizar mi perfil |
+| GET | `/tokens` | Sí | Listar mis tokens vigentes |
+| DELETE | `/tokens/{id}` | Sí | Revocar uno de mis tokens |
+| GET | `/servicios` | Sí | Servicios activos |
+| GET | `/servicios/{id}` | Sí | Un servicio |
 | GET | `/citas/usuario/{id}` | Sí | Citas de un usuario (el propio usuario o un admin). Filtro opcional `?estado=` |
 | GET | `/citas/{id}` | Sí | Una cita (su dueño o un admin) |
 | POST | `/citas` | Sí | Crear una cita |
 | PUT | `/citas/{id}` | Sí | Reprogramar y/o cambiar el estado |
+
+### POST /auth/register
+
+```json
+{ "nombre": "Laura", "apellido": "Gómez", "email": "laura@ejemplo.com", "telefono": "3001234567",
+  "password": "secreta123", "password_confirmation": "secreta123" }
+```
+
+Usa las mismas reglas que el registro web. Siempre crea un **cliente** sin confirmar (un `rol` enviado se ignora) y no devuelve token. Responde `201` con `usuario` y `confirmacionEnviada`; si el correo no salió, el enlace se puede reenviar desde el inicio de sesión de la web. Errores por campo: `422`.
+
+### GET y PUT /auth/profile
+
+`GET` devuelve `id`, `nombre`, `apellido`, `email`, `telefono`, `rol`, `admin` y `confirmado`.
+
+`PUT` cambia solo los campos enviados: `nombre`, `apellido`, `telefono`, `email`, `password` (con `password_confirmation`).
+
+| Cambio | Exige `password_actual` | Efecto en los tokens |
+|---|---|---|
+| Nombre, apellido o teléfono | No | Ninguno |
+| Contraseña | Sí | Se revocan los demás; el actual sigue sirviendo |
+| Email | Sí | Se revocan todos. La cuenta queda sin confirmar hasta abrir el enlace enviado al correo nuevo |
+
+Los cambios no cierran las sesiones ya abiertas en la web.
+
+### GET /tokens y DELETE /tokens/{id}
+
+```json
+{ "ok": true, "data": [ { "id": 7, "creado": "2026-11-27 15:00:00", "expira": "2026-11-27 23:00:00", "actual": true } ] }
+```
+
+Cada usuario, incluido el administrador, solo ve y revoca sus propios tokens (uno ajeno responde `404`). El valor del token nunca se devuelve.
 
 ### POST /auth/login
 
@@ -83,9 +133,11 @@ curl -X POST http://localhost/appsalon/public/api/auth/login \
   "usuario": { "id": 2, "nombre": "Cliente", "apellido": "Prueba", "email": "cliente@appsalon.com", "admin": false } } }
 ```
 
-Errores: `422` (email o contraseña vacíos), `401` (credenciales incorrectas, con un mensaje genérico que no revela si el email existe) y `403` (cuenta desactivada).
+Errores: `422` (email o contraseña vacíos), `401` (credenciales incorrectas, con un mensaje genérico que no revela si el email existe) y `403` (cuenta sin confirmar o desactivada).
 
 ### GET /servicios
+
+Requiere token.
 
 ```json
 { "ok": true, "data": [
@@ -158,7 +210,7 @@ Las citas `cancelada` o `completada` ya no admiten cambios de estado (`409`).
 B=http://localhost/appsalon/public/api
 TOKEN=$(curl -s -X POST $B/auth/login -H 'Content-Type: application/json' \
   -d '{"email":"cliente@appsalon.com","password":"cliente123"}' | php -r 'echo json_decode(stream_get_contents(STDIN),true)["data"]["token"];')
-curl -s $B/servicios
+curl -s $B/servicios -H "Authorization: Bearer $TOKEN"
 curl -s -X POST $B/citas -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"fecha":"2026-11-23","hora":"10:00","servicios":[2]}'
 curl -s $B/citas/usuario/2 -H "Authorization: Bearer $TOKEN"
