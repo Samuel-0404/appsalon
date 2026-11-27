@@ -1,0 +1,54 @@
+# AppSalon: app (PHP 8.3 + Apache) + db (MariaDB).
+# Uso:  cp .env.example .env  (y completar)  ->  docker compose up -d --build
+# La BD se crea e importa SOLA la primera vez (scripts en /docker-entrypoint-initdb.d).
+# Para reimportar desde cero:  docker compose down -v  (¡borra los datos!)
+
+services:
+  app:
+    build: .
+    image: appsalon-app
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: db                       # nombre del servicio = hostname en la red de Docker
+    ports:
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      - correos:/var/www/html/docs/correos_enviados   # copias de los correos (evidencia)
+    depends_on:
+      db:
+        condition: service_healthy      # no arranca hasta que MariaDB acepte conexiones
+
+  db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${DB_NAME:-appsalon_mvc_php}   # debe ser appsalon_mvc_php (los .sql hacen USE)
+      MARIADB_USER: ${DB_USER}
+      MARIADB_PASSWORD: ${DB_PASS}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASS}
+      TZ: America/Bogota
+    # Sin "ports": la BD NO queda expuesta fuera de Docker (solo la ve el servicio app)
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=-05:00
+      - --innodb-buffer-pool-size=64M   # la VM gratuita (e2-micro) solo tiene 1 GB de RAM
+      - --performance-schema=OFF
+    volumes:
+      - dbdata:/var/lib/mysql
+      - ./database/appsalon.sql:/docker-entrypoint-initdb.d/01_appsalon.sql:ro
+      - ./database/migraciones/002_api_reportes.sql:/docker-entrypoint-initdb.d/02_api_reportes.sql:ro
+      - ./database/migraciones/003_festivos.sql:/docker-entrypoint-initdb.d/03_festivos.sql:ro
+      - ./database/migraciones/004_roles_horario.sql:/docker-entrypoint-initdb.d/04_roles_horario.sql:ro
+      - ./database/datos_prueba.sql:/docker-entrypoint-initdb.d/05_datos_prueba.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  dbdata:
+  correos:

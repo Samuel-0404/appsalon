@@ -4,3 +4,6 @@ config/config.php
 vendor/
 .vscode/
 .DS_Store
+
+# Copias de correos enviados (datos personales de clientes): no se versionan
+docs/correos_enviados/*.html

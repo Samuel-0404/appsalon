@@ -1,25 +1,45 @@
 <?php
-// Entrega final (Semana 12-16)
+// Entrega final: panel del salón.
+//   Personal (admin + empleado): dashboard/agenda, cambio de estado de citas y disponibilidad.
+//   Solo admin: usuarios y roles, horario del salón y buzón de correos.
 
 class AdminController {
 
+    private const ESTADOS = ['pendiente', 'confirmada', 'completada', 'cancelada'];
+
     /**
-     * Dashboard principal: Estadísticas y Agenda de Citas con filtros
+     * Dashboard: métricas + agenda por día o por semana (lunes a domingo), con filtro de estado.
+     *   ?url=admin/dashboard&vista=dia|semana&fecha=2026-12-10&estado=pendiente
      */
     public function index() {
-        requireAdmin();
+        requirePersonal();
 
-        $filtroFecha = trim($_GET['fecha'] ?? '');
-        $filtroEstado = trim($_GET['estado'] ?? '');
+        $vista  = ($_GET['vista'] ?? 'dia') === 'semana' ? 'semana' : 'dia';
+        $estado = in_array($_GET['estado'] ?? '', self::ESTADOS, true) ? $_GET['estado'] : '';
+        $fecha  = self::fechaValida($_GET['fecha'] ?? '') ?? date('Y-m-d');
 
-        $metricas = Appointment::metricas();
-        $citas = Appointment::todas($filtroFecha ?: null, $filtroEstado ?: null);
+        $base = new DateTimeImmutable($fecha);
+        if ($vista === 'semana') {
+            $desde    = $base->modify('monday this week');
+            $hasta    = $desde->modify('+6 days');
+            $anterior = $desde->modify('-7 days');
+            $siguiente = $desde->modify('+7 days');
+        } else {
+            $desde = $hasta = $base;
+            $anterior  = $base->modify('-1 day');
+            $siguiente = $base->modify('+1 day');
+        }
 
         render('admin/index', [
-            'metricas'     => $metricas,
-            'citas'        => $citas,
-            'filtroFecha'  => $filtroFecha,
-            'filtroEstado' => $filtroEstado
+            'metricas'     => Appointment::metricas(),
+            'citas'        => Appointment::todas($desde->format('Y-m-d'), $hasta->format('Y-m-d'), $estado ?: null),
+            'modo'         => $vista,      // ojo: no llamarla 'vista', render() usa $vista para el archivo
+            'filtroFecha'  => $fecha,
+            'filtroEstado' => $estado,
+            'desde'        => $desde->format('Y-m-d'),
+            'hasta'        => $hasta->format('Y-m-d'),
+            'anterior'     => $anterior->format('Y-m-d'),
+            'siguiente'    => $siguiente->format('Y-m-d'),
         ]);
     }
 
@@ -27,16 +47,15 @@ class AdminController {
      * Cambiar el estado de una cita (Confirmar, Completar, Cancelar)
      */
     public function cambiarEstadoCita() {
-        requireAdmin();
+        requirePersonal();
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             validarCsrf();
 
             $id = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT);
             $estado = trim($_POST['estado'] ?? '');
-            $estadosValidos = ['pendiente', 'confirmada', 'completada', 'cancelada'];
 
-            if ($id && in_array($estado, $estadosValidos)) {
+            if ($id && in_array($estado, self::ESTADOS, true)) {
                 $actualizado = Appointment::cambiarEstado($id, $estado);
                 if ($actualizado) {
                     setAlerta('success', 'El estado de la cita #' . $id . ' se actualizó a "' . ucfirst($estado) . '".');
@@ -46,21 +65,23 @@ class AdminController {
             }
         }
 
-        $redireccion = 'admin/dashboard';
-        if (!empty($_POST['retorno_fecha'])) {
-            $redireccion .= '&fecha=' . urlencode($_POST['retorno_fecha']);
-        }
-        redirect($redireccion);
+        // Volver a la misma vista de agenda desde la que se hizo el cambio
+        $retorno = array_filter([
+            'vista'  => ($_POST['retorno_vista'] ?? '') === 'semana' ? 'semana' : null,
+            'fecha'  => self::fechaValida($_POST['retorno_fecha'] ?? ''),
+            'estado' => in_array($_POST['retorno_estado'] ?? '', self::ESTADOS, true) ? $_POST['retorno_estado'] : null,
+        ]);
+        redirect('admin/dashboard' . ($retorno ? '&' . http_build_query($retorno) : ''));
     }
 
     /**
-     * Gestión de Usuarios del sistema
+     * Gestión de Usuarios del sistema (solo administradores)
      */
     public function usuarios() {
         requireAdmin();
-        $usuarios = User::todos();
         render('admin/usuarios', [
-            'usuarios' => $usuarios
+            'usuarios' => User::todos(),
+            'roles'    => User::ROLES,
         ]);
     }
 
@@ -74,9 +95,10 @@ class AdminController {
             validarCsrf();
 
             $id = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT);
-            if ($id) {
-                User::toggleEstado($id);
+            if ($id && User::toggleEstado($id)) {
                 setAlerta('success', 'Estado del usuario actualizado correctamente.');
+            } elseif ($id) {
+                setAlerta('warning', 'Las cuentas de administrador no se pueden desactivar.');
             }
         }
 
@@ -84,64 +106,124 @@ class AdminController {
     }
 
     /**
-     * Pantalla de Gestión de Disponibilidad Horaria
+     * Asignar rol (cliente, empleado, admin). Un administrador no puede cambiar su propio rol,
+     * así el sistema nunca se queda sin administradores por accidente.
      */
-    public function disponibilidad() {
-        requireAdmin();
-
-        $fecha = trim($_GET['fecha'] ?? date('Y-m-d'));
-        $horarios = Appointment::estadoHorariosDia($fecha);
-
-        render('admin/disponibilidad', [
-            'fecha'    => $fecha,
-            'horarios' => $horarios
-        ]);
-    }
-
-    /**
-     * Bloquear una hora administrativamente
-     */
-    public function bloquearHora() {
+    public function cambiarRol() {
         requireAdmin();
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             validarCsrf();
 
-            $fecha = trim($_POST['fecha'] ?? '');
-            $hora  = trim($_POST['hora'] ?? '');
+            $id  = filter_var($_POST['id'] ?? null, FILTER_VALIDATE_INT);
+            $rol = (string)($_POST['rol'] ?? '');
 
-            if ($fecha && $hora) {
-                if (Appointment::disponible($fecha, $hora)) {
+            if (!$id || !in_array($rol, User::ROLES, true)) {
+                setAlerta('danger', 'Datos de rol inválidos.');
+            } elseif ($id === (int)$_SESSION['usuario_id']) {
+                setAlerta('warning', 'No puedes cambiar tu propio rol.');
+            } elseif (User::cambiarRol($id, $rol)) {
+                setAlerta('success', 'Rol actualizado a "' . ucfirst($rol) . '". Aplica en su próximo inicio de sesión.');
+            } else {
+                setAlerta('danger', 'No se pudo actualizar el rol.');
+            }
+        }
+
+        redirect('admin/usuarios');
+    }
+
+    /**
+     * Horario de atención del salón por día de la semana (solo administradores)
+     */
+    public function horario() {
+        requireAdmin();
+        $errores = [];
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            validarCsrf();
+            $dias = $_POST['dias'] ?? [];
+            $errores = Horario::guardar(is_array($dias) ? $dias : []);
+            if (!$errores) {
+                setAlerta('success', 'Horario del salón actualizado.');
+                redirect('admin/horario');
+            }
+        }
+
+        render('admin/horario', [
+            'semana'  => Horario::semana(),
+            'errores' => $errores,
+        ]);
+    }
+
+    /**
+     * Pantalla de Gestión de Disponibilidad Horaria (franjas del horario configurado)
+     */
+    public function disponibilidad() {
+        requirePersonal();
+
+        $fecha = self::fechaValida($_GET['fecha'] ?? '') ?? date('Y-m-d');
+
+        render('admin/disponibilidad', [
+            'fecha'    => $fecha,
+            'horario'  => Horario::delDia($fecha),
+            'festivo'  => Festivo::buscar($fecha),
+            'horarios' => Appointment::estadoHorariosDia($fecha)
+        ]);
+    }
+
+    /**
+     * Bloquear una hora administrativamente (cita sin servicios de 60 min).
+     * Solo si la franja completa está libre: usa la misma regla de solapamiento que las reservas.
+     */
+    public function bloquearHora() {
+        requirePersonal();
+
+        $fecha = self::fechaValida($_POST['fecha'] ?? '');
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            validarCsrf();
+
+            $hora = trim($_POST['hora'] ?? '');
+            if ($fecha && in_array($hora, Horario::franjas($fecha), true)) {
+                $fin = sprintf('%02d:00:00', (int)substr($hora, 0, 2) + 1);
+                if (!ValidadorCita::haySolapamiento($fecha, $hora . ':00', $fin)) {
                     Appointment::bloquearHorario((int)$_SESSION['usuario_id'], $fecha, $hora);
                     setAlerta('success', 'El horario de las ' . $hora . ' fue bloqueado para el día ' . $fecha . '.');
                 } else {
                     setAlerta('danger', 'Ese horario ya se encuentra ocupado.');
                 }
+            } else {
+                setAlerta('danger', 'Fecha u hora fuera del horario del salón.');
             }
         }
 
-        redirect('admin/disponibilidad&fecha=' . urlencode($_POST['fecha'] ?? date('Y-m-d')));
+        redirect('admin/disponibilidad&fecha=' . urlencode($fecha ?? date('Y-m-d')));
     }
 
     /**
-     * Desbloquear / liberar una hora
+     * Desbloquear / liberar una hora (solo borra bloqueos, nunca citas de clientes)
      */
     public function liberarHora() {
-        requireAdmin();
+        requirePersonal();
 
+        $fecha = self::fechaValida($_POST['fecha'] ?? '');
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             validarCsrf();
 
-            $fecha = trim($_POST['fecha'] ?? '');
-            $hora  = trim($_POST['hora'] ?? '');
-
-            if ($fecha && $hora) {
-                Appointment::liberarHorario($fecha, $hora);
+            $hora = trim($_POST['hora'] ?? '');
+            if ($fecha && preg_match('/^\d{2}:\d{2}$/', $hora) && Appointment::liberarHorario($fecha, $hora)) {
                 setAlerta('success', 'El horario de las ' . $hora . ' fue liberado exitosamente.');
+            } else {
+                setAlerta('warning', 'No había un bloqueo en ese horario.');
             }
         }
 
-        redirect('admin/disponibilidad&fecha=' . urlencode($_POST['fecha'] ?? date('Y-m-d')));
+        redirect('admin/disponibilidad&fecha=' . urlencode($fecha ?? date('Y-m-d')));
+    }
+
+    /** 'Y-m-d' válida o null. */
+    private static function fechaValida(string $valor): ?string {
+        $d = DateTimeImmutable::createFromFormat('!Y-m-d', $valor);
+        return ($d && $d->format('Y-m-d') === $valor) ? $valor : null;
     }
 
     /**

@@ -1,4 +1,4 @@
-<?php /* Responsable: B */ ?>
+<?php /* Responsable: B -- menú según el rol: personal (admin/empleado), cliente o visitante */ ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -9,17 +9,22 @@
   <link href="<?= BASE_URL ?>/css/styles.css" rel="stylesheet">
 </head>
 <body>
-<nav class="navbar navbar-expand-md navbar-dark bg-dark">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
   <div class="container">
     <a class="navbar-brand" href="<?= BASE_URL ?>/index.php">AppSalon</a>
     <button class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#menu"><span class="navbar-toggler-icon"></span></button>
     <div class="collapse navbar-collapse" id="menu">
       <ul class="navbar-nav ms-auto">
-        <?php if (esAdmin()): ?>
-          <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=admin/dashboard">📊 Dashboard</a></li>
-          <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=servicios/admin">✂️ Servicios</a></li>
-          <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=admin/usuarios">👥 Usuarios</a></li>
-          <li class="nav-item"><a class="nav-link text-warning" href="<?= BASE_URL ?>/index.php?url=auth/logout">Salir (<?= e($_SESSION['nombre'] ?? '') ?>)</a></li>
+        <?php if (esPersonal()): ?>
+          <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=admin/dashboard">📊 Agenda</a></li>
+          <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=admin/disponibilidad">⏰ Disponibilidad</a></li>
+          <?php if (esAdmin()): ?>
+            <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=servicios/admin">✂️ Servicios</a></li>
+            <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=admin/usuarios">👥 Usuarios</a></li>
+            <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=admin/horario">🗓️ Horario</a></li>
+            <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=reportes/index">📈 Reportes</a></li>
+          <?php endif; ?>
+          <li class="nav-item"><a class="nav-link text-warning" href="<?= BASE_URL ?>/index.php?url=auth/logout">Salir (<?= e($_SESSION['nombre'] ?? '') ?> · <?= e(rolActual()) ?>)</a></li>
         <?php elseif (estaLogueado()): ?>
           <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=servicios/index">Servicios</a></li>
           <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>/index.php?url=citas/crear">Reservar Cita</a></li>

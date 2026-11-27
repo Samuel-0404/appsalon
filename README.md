@@ -1,82 +1,141 @@
 # AppSalon - Sistema de Gestión de Citas
 
-Aplicación web desarrollada con PHP MVC propio y MySQL para la gestión de un salón de belleza.
+Aplicación web desarrollada con PHP MVC propio y MariaDB/MySQL para la gestión de un salón de belleza:
+reservas con calendario, panel del salón por roles, API REST, reportes y despliegue con Docker.
 
 ---
 
-## 1. Instrucciones de Instalación
+## 1. Instalación
 
-1. **Ubicación del proyecto:**
-   - Clonar o mover la carpeta del repositorio dentro del directorio `htdocs` de XAMPP:
-     ```text
-     C:\xampp\htdocs\appsalon
-     ```
+Hay dos formas de correr el proyecto. **Docker** es la recomendada (es la misma configuración del servidor).
 
-2. **Iniciar servicios:**
-   - Abrir el panel de control de **XAMPP** e iniciar los servicios de **Apache** y **MySQL**.
+### Opción A — Docker (recomendada)
 
-3. **Importar la Base de Datos:**
-   - Ingresar a phpMyAdmin en el navegador: `http://localhost/phpmyadmin/`.
-   - Ir a la pestaña **Importar** (o pestaña **SQL**) y seleccionar el script del proyecto:
-     ```text
-     database/appsalon.sql
-     ```
-   - Al ejecutarlo, se creará automáticamente la base de datos `appsalon_mvc_php`, las 4 tablas con claves foráneas y los datos de prueba.
+Requisitos: Docker Engine con el plugin `compose`.
 
-4. **Configuración del entorno:**
-   - Asegurarse de tener el archivo de configuración `includes/config.php` (si no existe, copiar `config/config.example.php` a `includes/config.php`).
-   - Configuración predeterminada para XAMPP:
-     ```php
-     define('DB_HOST', 'localhost');
-     define('DB_NAME', 'appsalon_mvc_php');
-     define('DB_USER', 'root');
-     define('DB_PASS', '');
-     define('BASE_URL', '/appsalon/public');
-     ```
+```bash
+git clone -b dev/julian https://github.com/Samuel-0404/appsalon.git
+cd appsalon
+cp .env.example .env          # completar claves de BD y de Brevo (formato CLAVE=valor)
+docker compose up -d --build
+```
 
-5. **Acceso a la aplicación:**
-   - Abrir en el navegador:
-     ```text
-     http://localhost/appsalon/public/
-     ```
+Abrir http://localhost:8080. La base de datos se crea e importa sola la primera vez
+(`appsalon.sql` → migraciones `002`, `003`, `004` → `datos_prueba.sql`).
+
+Despliegue en un servidor con HTTPS (Caddy + Let's Encrypt): ver [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md).
+
+### Opción B — XAMPP
+
+1. Copiar el proyecto en `htdocs` (Linux: `/opt/lampp/htdocs/appsalon`, Windows: `C:\xampp\htdocs\appsalon`) e iniciar **Apache** y **MySQL**.
+2. Importar `database/appsalon.sql` en phpMyAdmin (crea la BD `appsalon_mvc_php`, todas las tablas y los usuarios de prueba).
+   Opcional: importar `database/datos_prueba.sql` (10 clientes y 32 citas para los reportes).
+3. Copiar `config/config.example.php` como `config/config.php`. Con XAMPP no hay que cambiar nada de la BD;
+   para el correo, completar `SMTP_USER`, `SMTP_PASS` y `MAIL_FROM` (Brevo).
+4. Instalar dependencias en la raíz del proyecto: `composer install` (TCPDF y PHPMailer en `vendor/`).
+5. Abrir http://localhost/appsalon/public/
+
+**¿Ya tenías la BD de una entrega anterior?** No hace falta reimportar: aplica las migraciones que te falten
+(todas son idempotentes, se pueden ejecutar más de una vez):
+
+```bash
+/opt/lampp/bin/mysql -u root appsalon_mvc_php < database/migraciones/002_api_reportes.sql
+/opt/lampp/bin/mysql -u root appsalon_mvc_php < database/migraciones/003_festivos.sql
+/opt/lampp/bin/mysql -u root appsalon_mvc_php < database/migraciones/004_roles_horario.sql
+```
 
 ---
 
-## 2. Credenciales de Usuarios de Prueba
+## 2. Usuarios de prueba
 
-| Rol | Correo Electrónico | Contraseña | Redirección Inicial |
+| Rol | Correo | Contraseña | Al iniciar sesión |
 |:---|:---|:---|:---|
-| **Administrador** | `admin@appsalon.com` | `admin123` | Panel de Administración de Servicios (`servicios/admin`) |
-| **Cliente** | `cliente@appsalon.com` | `cliente123` | Catálogo Público de Servicios (`servicios/index`) |
+| **Administrador** | `admin@appsalon.com` | `admin123` | Panel del salón (`admin/dashboard`) |
+| **Empleado** | `empleado@appsalon.com` | `empleado123` | Panel del salón (agenda y disponibilidad) |
+| **Cliente** | `cliente@appsalon.com` | `cliente123` | Catálogo de servicios (`servicios/index`) |
+
+`datos_prueba.sql` agrega 10 clientes `@example.com` (contraseña `cliente123`).
 
 ---
 
-## 3. Descripción de Funcionalidades Implementadas
+## 3. Funcionalidades
 
-### Módulo de Autenticación y Seguridad
-- **Registro de usuarios:** Validación en servidor de nombre y apellido (solo letras), email único y válido, teléfono de 10 dígitos y contraseña mínima de 6 caracteres con confirmación.
-- **Cifrado de contraseñas:** Uso de hash seguro con `password_hash()` mediante algoritmo **bcrypt** y verificación con `password_verify()`.
-- **Inicio y cierre de sesión:** Autenticación con regeneración de ID de sesión (`session_regenerate_id()`) para evitar fijación de sesiones, destrucción de cookies en logout y redirección inteligente por rol.
-- **Control de accesos y roles:** Protección de rutas mediante guards en servidor (`requireLogin()` y `requireAdmin()`).
-- **Seguridad CSRF:** Generación y validación estricta de tokens en peticiones POST (`validarCsrf()`).
-- **Seguridad XSS:** Sanitización sistemática de salidas mediante la función de escape `e()` (`htmlspecialchars`).
+### Sistema de citas
+- **Calendario interactivo** (Flatpickr) con los días cerrados y los **festivos de Colombia** bloqueados.
+- **Selección múltiple de servicios** con total, duración y resumen en vivo.
+- **Disponibilidad real por duración:** una cita ocupa `[hora, hora + duración de sus servicios)`. El calendario
+  solo ofrece las horas donde la duración elegida cabe antes del cierre y sin cruzarse con otra cita o bloqueo.
+- **Reglas únicas en `models/ValidadorCita.php`**, usadas por la web y por la API: fecha no pasada, día abierto
+  según el horario, no festivo, servicios activos, fin antes del cierre y sin solapamiento. La reserva se
+  serializa por fecha con `GET_LOCK` para evitar dobles reservas simultáneas.
+- **Cancelar y reprogramar** citas pendientes propias.
+- **Correo de confirmación** con fecha, hora, servicios y total, enviado con PHPMailer por SMTP con TLS (Brevo)
+  al correo con el que se registró el cliente. Se guarda copia HTML en `docs/correos_enviados/`.
 
-### Módulo de Gestión de Servicios
-- **Catálogo público:** Visualización de servicios en tarjetas responsivas de Bootstrap con duración, descripción y precio formateado en Pesos Colombianos (COP).
-- **CRUD para administradores:**
-  - **Listar:** Tabla administrativa con el catálogo completo y botones de acción.
-  - **Crear:** Formulario con persistencia de datos ante fallos y validación de nombre obligatorio y precio numérico mayor a cero.
-  - **Editar:** Formulario con precarga de información y validación del lado del servidor.
-  - **Eliminar:** Petición POST protegida con token CSRF y mensaje de confirmación antes de borrar el registro.
-- **Validación visual:** Marcado de campos erróneos con la clase `is-invalid` y mensajes `.invalid-feedback` de Bootstrap.
-- **Mensajes de estado:** Sistema de alertas flash dismissibles para notificar el éxito o fracaso de las operaciones.
+### Festivos de Colombia (consumo de API externa)
+- `models/Festivo.php` consume la API pública **Nager.Date** con cURL (timeouts, validación de status y JSON) y
+  guarda los festivos en la tabla `festivos` (carga perezosa por año). Las validaciones siempre leen la BD,
+  así que si la API externa se cae el sistema sigue validando.
+- Endpoint interno `citas/festivos&anio=AAAA` (JSON) que consume el calendario.
+
+### Panel del salón (roles)
+| Función | Empleado | Administrador |
+|---|:---:|:---:|
+| Dashboard: citas de hoy, ingresos del mes, pendientes y total de clientes | ✅ | ✅ |
+| Agenda **por día o por semana** con filtro de estado y navegación | ✅ | ✅ |
+| Confirmar / completar / cancelar citas | ✅ | ✅ |
+| Disponibilidad: bloquear y liberar franjas horarias | ✅ | ✅ |
+| **Horario del salón** configurable por día de la semana (`admin/horario`) | | ✅ |
+| Usuarios: activar/desactivar y **asignar rol** (cliente, empleado, admin) | | ✅ |
+| Servicios (CRUD), reportes y buzón de correos | | ✅ |
+
+- El rol nunca se toma de un formulario público: todo registro nace como `cliente` y solo un administrador lo
+  cambia. Un administrador no puede cambiar su propio rol ni desactivarse.
+- Al cambiar un rol se revocan los tokens de API del usuario.
+
+### API REST
+- Front controller en `public/api.php` con rutas limpias `/api/...` (`public/.htaccess`), JSON con sobre
+  uniforme y códigos HTTP 200/201/204/400/401/403/404/405/409/415/422.
+- Autenticación con token Bearer de 256 bits (solo se guarda su hash SHA-256; vence a las 8 h).
+- Endpoints: `POST /auth/login`, `POST /auth/logout`, `GET /servicios`, `GET /servicios/{id}`,
+  `GET /citas/usuario/{id}`, `GET /citas/{id}`, `POST /citas` y `PUT /citas/{id}`.
+- Documentación en [`docs/API.md`](docs/API.md) y colección de Postman en `docs/AppSalon_API.postman_collection.json`.
+
+### Reportes y exportación
+- Filtros por **período, estado y servicio**; KPIs (ingresos realizados, por cobrar, ticket promedio, tasa de
+  cancelación) y gráficas con **Chart.js**. Con filtro de servicio, los ingresos usan el precio de ese servicio.
+- Exportación a **CSV** (citas, servicios y serie diaria; BOM UTF-8, separador `;`, protección contra inyección
+  de fórmulas) y a **PDF** (TCPDF).
+
+### Seguridad
+- Contraseñas con `password_hash()` (bcrypt), regeneración del ID de sesión, cookies `HttpOnly` + `SameSite`.
+- CSRF en todos los POST (`validarCsrf()`), escape de salida con `e()` y *prepared statements* en todas las consultas.
+- Guards por rol en el servidor: `requireLogin()`, `requirePersonal()` y `requireAdmin()`.
+- Los servicios se desactivan en lugar de borrarse, para conservar el historial de citas y los reportes.
+- Secretos fuera del repositorio: `config/config.php` y `.env` están en `.gitignore`.
 
 ---
 
-## 4. Tecnologías Utilizadas
+## 4. Estructura
 
-- **Backend:** PHP 8+ (Arquitectura MVC propia con Front Controller en `public/index.php`).
-- **Base de Datos:** MySQL / MariaDB interactuando mediante **PDO** y **Prepared Statements** en todas las consultas.
-- **Frontend:** HTML5 semántico, CSS3, JavaScript Vanilla y **Bootstrap 5.3.3**.
-- **Tipografía:** Google Fonts (*Poppins*).
-- **Entorno de Ejecución:** Servidor local XAMPP (Apache + MySQL / phpMyAdmin).
+```text
+config/        configuración (config.example.php lee variables de entorno) y conexión PDO
+controllers/   Auth, Service, Appointment, Admin, Report y Api
+models/        User, Service, Appointment, ValidadorCita, Horario, Festivo, Report, ApiToken
+views/         vistas por módulo + layout (Bootstrap 5)
+public/        front controllers (index.php y api.php), .htaccess, CSS y JS
+database/      appsalon.sql (esquema completo), migraciones/ y datos_prueba.sql
+docker/        configuración de Apache, PHP y Caddy
+docs/          API.md, DESPLIEGUE.md y colección de Postman
+```
+
+---
+
+## 5. Tecnologías
+
+- **Backend:** PHP 8.3 (MVC propio con front controller), PDO + prepared statements.
+- **Base de datos:** MariaDB 11 / MySQL (XAMPP).
+- **Frontend:** HTML5, CSS3, JavaScript, Bootstrap 5.3, Flatpickr y Chart.js.
+- **Librerías (Composer):** TCPDF (PDF) y PHPMailer (correo SMTP).
+- **Servicios externos:** Nager.Date (festivos) y Brevo (SMTP).
+- **Infraestructura:** Docker + Docker Compose, Caddy (HTTPS) y Microsoft Azure (VM Ubuntu).

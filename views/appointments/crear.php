@@ -94,7 +94,7 @@
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-white py-3 border-bottom">
                     <h5 class="mb-0 fw-bold">2. Elige Fecha y Horario</h5>
-                    <small class="text-muted">Horario continuo de Lunes a Sábado</small>
+                    <small class="text-muted">Los días cerrados y festivos aparecen bloqueados en el calendario</small>
                 </div>
                 <div class="card-body p-4">
                     <!-- Calendario Visual Integrado -->
@@ -109,22 +109,9 @@
                             <span>Horarios disponibles:</span>
                             <small class="text-muted fw-normal" id="fecha-label">Selecciona una fecha</small>
                         </label>
-                        <div class="row row-cols-3 g-2" id="grid-horas">
-                            <?php 
-                            $horasDisponibles = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'];
-                            foreach ($horasDisponibles as $h):
-                                $hNum = (int)substr($h, 0, 2);
-                                $label = ($hNum < 12) ? $h.' AM' : (($hNum === 12) ? '12:00 PM' : ($hNum-12).':00 PM');
-                            ?>
-                                <div class="col">
-                                    <button type="button" 
-                                            class="btn btn-outline-primary btn-sm w-100 py-2 hora-btn" 
-                                            data-hora="<?= $h ?>">
-                                        <?= $label ?>
-                                    </button>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
+                        <!-- Los botones se generan con JS según el horario del día y las citas existentes -->
+                        <div class="row row-cols-3 g-2" id="grid-horas"></div>
+                        <p class="small text-muted mt-2 mb-0" id="nota-horas"></p>
                         <small class="text-danger d-none mt-2 d-block" id="error-hora">Por favor selecciona un horario disponible.</small>
                     </div>
 
@@ -158,94 +145,172 @@
     </div>
 </form>
 
+<style>
+  .flatpickr-day.festivo { color: #dc3545 !important; text-decoration: line-through; }
+</style>
 <!-- Scripts de Flatpickr e Interactividad -->
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://npmcdn.com/flatpickr/dist/l10n/es.js"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    const BASE = '<?= BASE_URL ?>/index.php?url=';
     const inputFecha = document.getElementById('fecha');
     const inputHora = document.getElementById('hora');
     const fechaLabel = document.getElementById('fecha-label');
+    const notaHoras = document.getElementById('nota-horas');
+    const gridHoras = document.getElementById('grid-horas');
     const resumenFechaHora = document.getElementById('resumen-fecha-hora');
-    const botonesHora = document.querySelectorAll('.hora-btn');
     const checks = document.querySelectorAll('.check-servicio');
     const precioTotalEl = document.getElementById('precio-total');
     const duracionTotalEl = document.getElementById('duracion-total');
     const listaResumenEl = document.getElementById('lista-resumen');
 
-    let fechaActual = inputFecha.value || '<?= date('Y-m-d') ?>';
+    // Días de la semana cerrados según el horario configurado por el administrador (0 = domingo)
+    const DIAS_CERRADOS = <?= json_encode(array_keys(array_filter(Horario::semana(), fn($h) => !$h['abierto']))) ?>;
+    const DURACION_MINIMA = 60;   // sin servicios marcados, se valida una franja de 1 hora
 
-    // 1. Inicializar Flatpickr en modo visual integrado (Inline)
+    let fechaActual = inputFecha.value || '<?= date('Y-m-d') ?>';
+    let disponibilidad = null;    // última respuesta de citas/horas-ocupadas
+
+    // ---- Utilidades de tiempo ('HH:MM' <-> minutos) ----
+    const aMin = h => parseInt(h.slice(0, 2), 10) * 60 + parseInt(h.slice(3, 5), 10);
+    const etiqueta = h => {
+        const n = parseInt(h.slice(0, 2), 10);
+        return n < 12 ? `${h} AM` : (n === 12 ? '12:00 PM' : `${n - 12}:00 PM`);
+    };
+    const ymd = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    // ---- 1. Calendario: días cerrados + festivos (se llenan vía fetch) ----
+    const festivos = {};
+    const esCerrado = d => DIAS_CERRADOS.includes(d.getDay());
+    const esFestivo = d => ymd(d) in festivos;
+
     const fp = flatpickr("#calendario-inline", {
         inline: true,
         locale: 'es',
         minDate: 'today',
         defaultDate: fechaActual,
-        disable: [
-            function(date) {
-                // Deshabilitar Domingos (0 = Domingo)
-                return (date.getDay() === 0);
+        disable: [esCerrado],
+        onDayCreate: (dObj, dStr, instancia, dayElem) => {
+            const nombre = festivos[ymd(dayElem.dateObj)];
+            if (nombre) {
+                dayElem.classList.add('festivo');
+                dayElem.title = 'Festivo: ' + nombre;
             }
-        ],
+        },
         onChange: function(selectedDates, dateStr) {
             fechaActual = dateStr;
             inputFecha.value = dateStr;
             inputHora.value = '';
-            deseleccionarHoras();
             actualizarTextoFechaHora();
             consultarDisponibilidad(dateStr);
         }
     });
 
-    // 2. Consulta en tiempo real de horarios ocupados vía AJAX
+    function cargarFestivos(anio) {
+        return fetch(BASE + 'citas/festivos&anio=' + anio)
+            .then(res => {
+                if (!res.ok) throw new Error('HTTP ' + res.status);   // fetch NO falla con 4xx/5xx; hay que revisarlo
+                return res.json();
+            })
+            .then(data => data.festivos.forEach(f => { festivos[f.fecha] = f.nombre; }));
+    }
+
+    // Año actual + siguiente (en noviembre/diciembre ya se agenda para enero)
+    const anioActual = new Date().getFullYear();
+    Promise.all([cargarFestivos(anioActual), cargarFestivos(anioActual + 1)])
+        .then(() => fp.set('disable', [esCerrado, esFestivo]))   // set() redibuja → corre onDayCreate
+        .catch(err => console.error('No se pudieron cargar los festivos:', err));
+
+    // ---- 2. Disponibilidad del día (horario + citas existentes con su duración) ----
     function consultarDisponibilidad(fecha) {
         fechaLabel.textContent = 'Consultando disponibilidad...';
-        
-        fetch('<?= BASE_URL ?>/index.php?url=citas/horas-ocupadas&fecha=' + fecha)
-            .then(res => res.json())
+        fetch(BASE + 'citas/horas-ocupadas&fecha=' + encodeURIComponent(fecha))
+            .then(res => {
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return res.json();
+            })
             .then(data => {
-                const ocupadas = data.ocupadas || [];
-                fechaLabel.textContent = 'Horarios para el ' + fecha;
-
-                botonesHora.forEach(btn => {
-                    const h = btn.dataset.hora;
-                    if (ocupadas.includes(h)) {
-                        btn.disabled = true;
-                        btn.classList.add('btn-outline-secondary', 'disabled');
-                        btn.classList.remove('btn-outline-primary', 'selected');
-                        btn.innerText = h + ' (Ocupado)';
-                    } else {
-                        btn.disabled = false;
-                        btn.classList.remove('btn-outline-secondary', 'disabled');
-                        btn.classList.add('btn-outline-primary');
-                        // Restaurar texto limpio
-                        const hNum = parseInt(h.substring(0, 2));
-                        const label = (hNum < 12) ? h + ' AM' : ((hNum === 12) ? '12:00 PM' : (hNum - 12) + ':00 PM');
-                        btn.innerText = label;
-                    }
-                });
+                disponibilidad = data;
+                fechaLabel.textContent = data.abierto
+                    ? `Horario del ${fecha}: ${data.apertura} a ${data.cierre}`
+                    : 'El salón no atiende ese día';
+                pintarHoras();
             })
             .catch(err => {
                 console.error(err);
-                fechaLabel.textContent = 'Horarios disponibles';
+                fechaLabel.textContent = 'No se pudo consultar la disponibilidad';
             });
     }
 
-    // 3. Selección interactiva de hora
-    botonesHora.forEach(btn => {
-        btn.addEventListener('click', () => {
-            if (btn.disabled) return;
-            deseleccionarHoras();
-            btn.classList.add('selected');
-            inputHora.value = btn.dataset.hora;
-            actualizarTextoFechaHora();
-        });
-    });
-
-    function deseleccionarHoras() {
-        botonesHora.forEach(b => b.classList.remove('selected'));
+    function duracionSeleccionada() {
+        let min = 0;
+        checks.forEach(c => { if (c.checked) min += parseInt(c.dataset.duracion, 10) || 0; });
+        return min || DURACION_MINIMA;
     }
+
+    /**
+     * Una hora H está disponible si [H, H + duración) cabe antes del cierre y no se cruza con
+     * ninguna cita: A.inicio < B.fin && B.inicio < A.fin (la misma regla que ValidadorCita en el servidor).
+     */
+    function motivoNoDisponible(h, duracion) {
+        const ini = aMin(h), fin = ini + duracion;
+        if (fin > aMin(disponibilidad.cierre)) return 'no alcanza';
+        if (fechaActual === ymd(new Date())) {
+            const ahora = new Date();
+            if (ini <= ahora.getHours() * 60 + ahora.getMinutes()) return 'ya pasó';
+        }
+        const choca = disponibilidad.intervalos.some(iv => ini < aMin(iv.fin) && aMin(iv.inicio) < fin);
+        return choca ? 'ocupado' : null;
+    }
+
+    function pintarHoras() {
+        gridHoras.replaceChildren();
+        if (!disponibilidad || !disponibilidad.abierto) {
+            notaHoras.textContent = 'Elige otro día en el calendario.';
+            inputHora.value = '';
+            actualizarTextoFechaHora();
+            return;
+        }
+
+        const duracion = duracionSeleccionada();
+        let libres = 0;
+        disponibilidad.franjas.forEach(h => {
+            const motivo = motivoNoDisponible(h, duracion);
+            const col = document.createElement('div');
+            col.className = 'col';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.dataset.hora = h;
+            btn.className = 'btn btn-sm w-100 py-2 hora-btn ' + (motivo ? 'btn-outline-secondary' : 'btn-outline-primary');
+            btn.disabled = motivo !== null;
+            btn.textContent = motivo ? `${h} (${motivo})` : etiqueta(h);
+            if (!motivo && inputHora.value === h) btn.classList.add('selected');
+            if (!motivo) libres++;
+            col.appendChild(btn);
+            gridHoras.appendChild(col);
+        });
+
+        // Si la hora elegida dejó de caber (p. ej. se agregó un servicio largo), se descarta
+        if (inputHora.value && !gridHoras.querySelector(`.hora-btn.selected`)) {
+            inputHora.value = '';
+            actualizarTextoFechaHora();
+        }
+        notaHoras.textContent = libres
+            ? `Horas calculadas para una duración de ${duracion} min.`
+            : `No hay horas libres para ${duracion} min ese día. Prueba otra fecha o menos servicios.`;
+    }
+
+    // ---- 3. Selección de hora (delegación: los botones se recrean en cada consulta) ----
+    gridHoras.addEventListener('click', e => {
+        const btn = e.target.closest('.hora-btn');
+        if (!btn || btn.disabled) return;
+        gridHoras.querySelectorAll('.hora-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        inputHora.value = btn.dataset.hora;
+        actualizarTextoFechaHora();
+    });
 
     function actualizarTextoFechaHora() {
         const f = inputFecha.value;
@@ -262,7 +327,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 4. Cálculo en vivo de servicios y precios
+    // ---- 4. Cálculo en vivo de servicios, precio y duración ----
     function actualizarResumenServicios() {
         let total = 0;
         let duracion = 0;
@@ -282,13 +347,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (seleccionados.length === 0) {
             listaResumenEl.innerHTML = '<em class="text-danger">Selecciona al menos un servicio para continuar.</em>';
         } else {
-            listaResumenEl.innerHTML = '<ul class="mb-0 ps-3">' + 
-                seleccionados.map(s => `<li>${s}</li>`).join('') + 
-                '</ul>';
+            // textContent (no innerHTML): el nombre del servicio nunca se interpreta como HTML
+            const ul = document.createElement('ul');
+            ul.className = 'mb-0 ps-3';
+            seleccionados.forEach(nombre => {
+                const li = document.createElement('li');
+                li.textContent = nombre;
+                ul.appendChild(li);
+            });
+            listaResumenEl.replaceChildren(ul);
         }
     }
 
-    checks.forEach(check => check.addEventListener('change', actualizarResumenServicios));
+    checks.forEach(check => check.addEventListener('change', () => {
+        actualizarResumenServicios();
+        if (disponibilidad) pintarHoras();   // la duración cambió: recalcular qué horas caben
+    }));
 
     // Inicializar al cargar la página
     actualizarResumenServicios();
@@ -296,7 +370,7 @@ document.addEventListener('DOMContentLoaded', () => {
     consultarDisponibilidad(fechaActual);
     actualizarTextoFechaHora();
 
-    // 5. Validación antes de enviar el formulario
+    // ---- 5. Validación antes de enviar el formulario ----
     document.getElementById('form-cita').addEventListener('submit', (e) => {
         if (!inputHora.value) {
             e.preventDefault();

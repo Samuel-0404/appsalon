@@ -1,0 +1,12 @@
+# Responsable: A
+# Rutas limpias para la API: /appsalon/public/api/citas/3 -> api.php?ruta=citas/3
+# Requiere mod_rewrite (activo por defecto en XAMPP) y AllowOverride All en htdocs.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Con PHP como CGI/FastCGI, Apache no pasa la cabecera Authorization a PHP: se reenvía aquí.
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    RewriteRule ^api/?(.*)$ api.php?ruta=$1 [QSA,L]
+</IfModule>

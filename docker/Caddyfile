@@ -1,0 +1,7 @@
+# Caddy: proxy inverso con HTTPS automático (Let's Encrypt / ZeroSSL).
+# Obtiene y renueva el certificado solo; necesita los puertos 80 y 443 abiertos
+# y que el dominio (DOMAIN en .env) apunte a la IP pública de la VM.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:80
+}
